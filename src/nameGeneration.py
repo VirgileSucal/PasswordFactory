@@ -17,7 +17,7 @@ import time
 import math
 
 from os import listdir, path, makedirs, popen
-from os.path import isdir, isfile, join
+from os.path import isdir, isfile, join, basename
 
 import torch
 import torch.nn as nn
@@ -86,12 +86,14 @@ def getLines(f):
 def split(rate, lines):
     names = []
 
-    for letter in string.ascii_uppercase:
+    # for letter in string.ascii_uppercase:
+    for letter in string.ascii_letters:
         names_letter = []
         for line in lines:
             if line[0] == letter:
                 names_letter.append(line)
-        names.append(names_letter)
+        if len(names_letter) > 0:
+            names.append(names_letter)
 
     print('split names: ', len(names))
     names_traing = []
@@ -538,8 +540,8 @@ if __name__ == '__main__':
     file = unidecode.unidecode(open(repData).read())
     file_len = len(file)
     bidirectional = args.bidirectional
-    # lines = getLines(filenameTrain, lines)
-    # train, test = split(args.s, lines)
+    lines = getLines(filename)
+    train_set, test_set = split(args.s, lines)
 
     print('filenameTrain: ', filenameTrain)
     lineTraining = getLines(filenameTrain)
@@ -566,8 +568,8 @@ if __name__ == '__main__':
 
     modelFile = args.run + "_" + str(args.num_layers) + "_" + str(args.hidden_size) + ".pt"
 
-    # if not path.exists(args.model):
-    #	makedirs(args.model)
+    if not path.exists(args.model):
+        makedirs(basename(args.model))
 
     #########
     # TRAIN #
