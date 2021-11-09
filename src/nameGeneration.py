@@ -72,9 +72,10 @@ def readLines(filename):
         return [unicodeToAscii(line.strip().lower()) for line in some_file]
 
 
-filename = 'data/names/Russian.txt'
-filenameTrain = 'data/RussianTrain.txt'
-filenameTest = 'data/RussianTest.txt'
+data = '../data/'
+filename = '../data/' + 'names/Russian.txt'
+filenameTrain = '../data/' + 'RussianTrain.txt'
+filenameTest = '../data/' + 'RussianTest.txt'
 
 
 def getLines(f):
@@ -509,7 +510,7 @@ if __name__ == '__main__':
 
     parser = ArgumentParser()
     #
-    parser.add_argument("-d", "--trainingData", default="data/shakespeare.txt", type=str,
+    parser.add_argument("-d", "--trainingData", default=filename, type=str,
                         help="trainingData [path/to/the/data]")
     parser.add_argument("-te", "--trainEval", default='train', type=str, help="trainEval [train, eval, test]")
     #
@@ -528,7 +529,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', default=2, type=int)
     parser.add_argument('--hidden_size', default=256, type=int)
     parser.add_argument('--bidirectional', default=True, type=bool, help="Bidirectionnal model [default True]")
-    parser.add_argument('--max_epochs', default=100000, type=int)
+    parser.add_argument('--max_epochs', default=n_epochs, type=int)
     parser.add_argument('-p', '--percent', default=15, type=float,
                         help="percent (number between 1 and 100) of the total names to find (test) [default 15%]")
     #
