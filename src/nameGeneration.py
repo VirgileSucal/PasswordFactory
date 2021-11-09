@@ -53,8 +53,14 @@ all_letters = string.ascii_letters + " .,;'-"
 print('all_letters: ', all_letters)
 n_letters = len(all_letters) + 1  # Plus EOS marker
 
+data = '../data/'
+filename = '../data/' + 'names/Russian.txt'
+filenameTrain = '../data/' + 'RussianTrain.txt'
+filenameTest = '../data/' + 'RussianTest.txt'
 
-def findFiles(path): return glob.glob(path)
+
+def findFiles(path):
+    return glob.glob(path)
 
 
 # Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
@@ -70,12 +76,6 @@ def unicodeToAscii(s):
 def readLines(filename):
     with open(filename, encoding='utf-8') as some_file:
         return [unicodeToAscii(line.strip().lower()) for line in some_file]
-
-
-data = '../data/'
-filename = '../data/' + 'names/Russian.txt'
-filenameTrain = '../data/' + 'RussianTrain.txt'
-filenameTest = '../data/' + 'RussianTest.txt'
 
 
 def getLines(f):
@@ -218,8 +218,7 @@ class RNNLight(nn.Module):
         if self.bidirectional:
             self.num_directions = 2
 
-        self.rnn = nn.RNN(input_size=self.input_size, hidden_size=self.hidden_size, num_layers=1,
-                          bidirectional=self.bidirectional, batch_first=True)
+        self.rnn = nn.RNN(input_size=self.input_size, hidden_size=self.hidden_size, num_layers=1, bidirectional=self.bidirectional, batch_first=True)
         self.out = nn.Linear(self.num_directions * self.hidden_size, output_size)
 
         self.dropout = nn.Dropout(0.1)
@@ -295,6 +294,40 @@ class RNN(nn.Module):
     # return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
 
 
+class LSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, n_layers=1):
+        super(LSTM, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+
+        self.encoder = nn.Embedding(input_size, hidden_size)
+        self.lstm = nn.LSTM(hidden_size, hidden_size, n_layers)
+        self.decoder = nn.Linear(hidden_size, output_size)
+
+        self.dropout = nn.Dropout(0.1)
+        self.softmax = nn.LogSoftmax(dim=1)
+
+    # def forward(self, input, hidden):
+    def forward(self, input, hidden, cell):
+        input = self.encoder(input.view(1, -1))
+        output, (hidden, cell) = self.lstm(input.view(1, 1, -1), (hidden, cell))
+        output = self.decoder(output.view(1, -1))
+
+        output = self.dropout(output)
+        output = self.softmax(output)
+
+        return output, (hidden, cell)
+
+    def init_hidden(self):
+        return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
+
+    def init_cell(self):
+        return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
+
+
+
 def training(n_epochs, lines):
     print()
     print('-----------')
@@ -313,7 +346,7 @@ def training(n_epochs, lines):
         total_loss += loss
 
         if iter % print_every == 0:
-            print('%s (%d %d%%) %.4f (%.4f)' % (timeSince(start), iter, iter / n_iters * 100, total_loss / iter, loss))
+            print('%s (%d %d%%) %.4f (%.4f)' % (timeSince(start), iter, iter / n_epochs * 100, total_loss / iter, loss))
 
 
 max_length = 20
@@ -427,8 +460,10 @@ def testing(decoder, nb_samples, lineTest, percent):
             while predicted in predicted_current:
                 starting_letters = ""
                 for n in range(nc):
-                    rc = random.randint(0, len(string.ascii_uppercase) - 1)
-                    starting_letters = starting_letters + string.ascii_uppercase[rc]
+                    # rc = random.randint(0, len(string.ascii_uppercase) - 1)
+                    rc = random.randint(0, len(string.ascii_lowercase) - 1)
+                    # starting_letters = starting_letters + string.ascii_uppercase[rc]
+                    starting_letters = starting_letters + string.ascii_lowercase[rc]
 
                 predicted = sample(decoder, starting_letters).lower()
 
@@ -442,7 +477,7 @@ def testing(decoder, nb_samples, lineTest, percent):
 
         accuracy = 100 * accuracy / nb_samples
 
-        print('Accuracy: ', accuracy, '%')
+        print('\nAccuracy: ', accuracy, '%')
 
     else:
         i = 0
@@ -517,21 +552,16 @@ if __name__ == '__main__':
     parser.add_argument("-r", "--run", default="rnnGeneration", type=str, help="name of the model saved file")
     # parser.add_argument("-mt", "--modelTraining", default='models', type=str, help="Path of the model to save (train) [path/to/the/model]")
     # parser.add_argument("-me", "--modelEval", default='models', type=str, help="Name of the model to load (eval) [path/to/the/model]")
-    parser.add_argument("-m", "--model", default='models/rnn.pt', type=str,
-                        help="Path of the model to save for trainingof to load for evaluating/testing (eval/test) [path/to/the/model]")
-    #
-    parser.add_argument('--n', default=10000, type=int,
-                        help="number of samples to generate [< 1000]. If < 0, the algorithm will provide names till it reaches the percent (see --p option)")
-    parser.add_argument('--ml', default=10, type=int,
-                        help="number of characters to generate for each name [default =10]. if < 0 => the number of chars = mean(training set)")
-    parser.add_argument('--s', default=0.7, type=int,
-                        help="percent of the dataset devoted for training [default =70% and therefore testing =30%]")
+    parser.add_argument("-m", "--model", default='models/rnn.pt', type=str, help="Path of the model to save for trainingof to load for evaluating/testing (eval/test) [path/to/the/model]")
+    parser.add_argument('--n', default=n_samples, type=int, help="number of samples to generate [< 1000]. If < 0, the algorithm will provide names till it reaches the percent (see --p option)")
+    parser.add_argument('--ml', default=10, type=int, help="number of characters to generate for each name [default =10]. if < 0 => the number of chars = mean(training set)")
+    parser.add_argument('--s', default=0.7, type=int, help="percent of the dataset devoted for training [default =70% and therefore testing =30%]")
     parser.add_argument('--num_layers', default=2, type=int)
     parser.add_argument('--hidden_size', default=256, type=int)
     parser.add_argument('--bidirectional', default=True, type=bool, help="Bidirectionnal model [default True]")
     parser.add_argument('--max_epochs', default=n_epochs, type=int)
-    parser.add_argument('-p', '--percent', default=15, type=float,
-                        help="percent (number between 1 and 100) of the total names to find (test) [default 15%]")
+    parser.add_argument('-p', '--percent', default=15, type=float, help="percent (number between 1 and 100) of the total names to find (test) [default 15%]")
+    parser.add_argument('-c', '--nn_class', default='RNNLight', type=str, help="Neural network to use [default RNNLight]")
     #
     args = parser.parse_args()
     #
@@ -556,8 +586,19 @@ if __name__ == '__main__':
     else:
         max_length = getMeanSize(lineTraining)
 
-    decoder = RNNLight(n_letters, 128, n_letters).to(
-        device)  # RNN(n_characters, args.hidden_size, n_characters, args.num_layers).to(device)
+    nn_classes = {
+        "RNNLight": RNNLight(n_letters, args.hidden_size, n_letters).to(device),
+        # "RNN": RNN(n_letters, args.hidden_size, n_letters, args.num_layers).to(device),
+        "RNN": RNN(n_letters, args.hidden_size, n_letters).to(device),
+        "LSTM": LSTM(n_letters, args.hidden_size, n_letters, args.num_layers).to(device)
+    }
+    decoder = nn_classes["RNNLight"]
+    for k, v in nn_classes.items():
+        if args.nn_class == nn:
+            decoder = v
+    # decoder = RNNLight(n_letters, 128, n_letters).to(device)
+    # decoder = RNN(n_characters, args.hidden_size, n_characters, args.num_layers).to(device)
+    # decoder = LSTM(n_characters, args.hidden_size, n_characters, args.num_layers).to(device)
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=lr)
 
     print('decoder: ', decoder)
