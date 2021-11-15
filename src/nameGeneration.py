@@ -1,3 +1,5 @@
+#! /bin/env python3
+
 from __future__ import unicode_literals, print_function, division
 
 import unidecode
@@ -17,7 +19,7 @@ import time
 import math
 
 from os import listdir, path, makedirs, popen
-from os.path import isdir, isfile, join, basename
+from os.path import isdir, isfile, join, basename, dirname
 
 import torch
 import torch.nn as nn
@@ -63,9 +65,9 @@ n_letters = len(all_letters) + 1  # Plus EOS marker
 
 data = '../data/'
 filename = '../data/' + 'names/Russian.txt'
-filenameTrain = '../data/' + 'RussianTrain.txt'
-filenameTest = '../data/' + 'RussianTest.txt'
-
+filenameTrain = '../outputs/' + 'RussianTrain.txt'
+filenameTest = '../outputs/' + 'RussianTest.txt'
+models_path = '../outputs/models/'
 
 def findFiles(path):
     return glob.glob(path)
@@ -595,7 +597,7 @@ if __name__ == '__main__':
     parser.add_argument("-r", "--run", default="rnnGeneration", type=str, help="name of the model saved file")
     # parser.add_argument("-mt", "--modelTraining", default='models', type=str, help="Path of the model to save (train) [path/to/the/model]")
     # parser.add_argument("-me", "--modelEval", default='models', type=str, help="Name of the model to load (eval) [path/to/the/model]")
-    parser.add_argument("-m", "--model", default='models/rnn.pt', type=str, help="Path of the model to save for trainingof to load for evaluating/testing (eval/test) [path/to/the/model]")
+    parser.add_argument("-m", "--model", default=str(models_path + 'rnn.pt'), type=str, help="Path of the model to save for trainingof to load for evaluating/testing (eval/test) [path/to/the/model]")
     parser.add_argument('--n', default=n_samples, type=int, help="number of samples to generate [< 1000]. If < 0, the algorithm will provide names till it reaches the percent (see --p option)")
     parser.add_argument('--ml', default=10, type=int, help="number of characters to generate for each name [default =10]. if < 0 => the number of chars = mean(training set)")
     parser.add_argument('--s', default=0.7, type=int, help="percent of the dataset devoted for training [default =70% and therefore testing =30%]")
@@ -651,8 +653,10 @@ if __name__ == '__main__':
 
     modelFile = args.run + "_" + str(args.num_layers) + "_" + str(args.hidden_size) + ".pt"
 
-    if not path.exists(args.model):
-        makedirs(basename(args.model))
+    print(args.model)
+    print(dirname(args.model))
+    if not path.exists(dirname(args.model)):
+        makedirs(dirname(args.model))
 
     #########
     # TRAIN #
