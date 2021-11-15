@@ -23,8 +23,6 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-import time, math
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
@@ -48,6 +46,16 @@ hidden_size = 512
 n_layers = 2
 lr = 0.005
 bidirectional = True
+
+n_samples = 10000
+
+# test_code = True
+test_code = False
+if test_code:
+    n_iters = 1000
+    n_epochs = 2000
+    n_samples = 500
+
 
 all_letters = string.ascii_letters + " .,;'-"
 print('all_letters: ', all_letters)
@@ -178,13 +186,19 @@ def randomTrainingExample(lines):
 def train(input_line_tensor, target_line_tensor):
     target_line_tensor.unsqueeze_(-1)
     hidden = decoder.init_hidden()
+    cell = decoder.init_hidden()
+    output = None
 
     decoder.zero_grad()
 
     loss = 0
 
     for i in range(input_line_tensor.size(0)):
-        output, hidden = decoder(input_line_tensor[i].to(device), hidden.to(device))
+        # output, hidden = decoder(input_line_tensor[i].to(device), hidden.to(device))
+        if type(decoder) == LSTM:
+            output, (hidden, cell) = decoder(input_line_tensor[i].to(device), hidden, cell)
+        else:
+            output, hidden = decoder(input_line_tensor[i].to(device), hidden.to(device))
         l = criterion(output.to(device), target_line_tensor[i].to(device))
         loss += l
 
@@ -324,6 +338,35 @@ class LSTM(nn.Module):
         return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
 
     def init_cell(self):
+        return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
+
+
+class GRU(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, n_layers=1):
+        super(GRU, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+
+        self.encoder = nn.Embedding(input_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size, n_layers)
+        self.decoder = nn.Linear(hidden_size, output_size)
+
+        self.dropout = nn.Dropout(0.1)
+        self.softmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, input, hidden):
+        input = self.encoder(input.view(1, -1))
+        output, hidden = self.gru(input.view(1, 1, -1), hidden)
+        output = self.decoder(output.view(1, -1))
+
+        output = self.dropout(output)
+        output = self.softmax(output)
+
+        return output, hidden
+
+    def init_hidden(self):
         return Variable(torch.zeros(self.n_layers, 1, self.hidden_size, device=device))
 
 
@@ -590,15 +633,13 @@ if __name__ == '__main__':
         "RNNLight": RNNLight(n_letters, args.hidden_size, n_letters).to(device),
         # "RNN": RNN(n_letters, args.hidden_size, n_letters, args.num_layers).to(device),
         "RNN": RNN(n_letters, args.hidden_size, n_letters).to(device),
-        "LSTM": LSTM(n_letters, args.hidden_size, n_letters, args.num_layers).to(device)
+        "LSTM": LSTM(n_letters, args.hidden_size, n_letters, args.num_layers).to(device),
+        "GRU": GRU(n_letters, args.hidden_size, n_letters, args.num_layers).to(device),
     }
     decoder = nn_classes["RNNLight"]
     for k, v in nn_classes.items():
         if args.nn_class == nn:
             decoder = v
-    # decoder = RNNLight(n_letters, 128, n_letters).to(device)
-    # decoder = RNN(n_characters, args.hidden_size, n_characters, args.num_layers).to(device)
-    # decoder = LSTM(n_characters, args.hidden_size, n_characters, args.num_layers).to(device)
     decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=lr)
 
     print('decoder: ', decoder)
