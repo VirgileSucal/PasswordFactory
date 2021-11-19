@@ -51,8 +51,8 @@ bidirectional = True
 
 n_samples = 10000
 
-# test_code = True
-test_code = False
+test_code = True
+# test_code = False
 if test_code:
     n_iters = 1000
     n_epochs = 2000
@@ -612,6 +612,11 @@ if __name__ == '__main__':
     #
     repData = args.trainingData  # "data/out/text10.txt"
     # repData = "data/shakespeare.txt"
+
+    if not path.exists(dirname(filenameTrain)):
+        makedirs(dirname(filenameTrain))
+    if not path.exists(dirname(filenameTest)):
+        makedirs(dirname(filenameTest))
 
     file = unidecode.unidecode(open(repData).read())
     file_len = len(file)
