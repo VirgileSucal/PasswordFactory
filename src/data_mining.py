@@ -34,6 +34,16 @@ def violin(data, path):
     plt.close()
 
 
+def get_duplicate(data):
+    data_count = {}
+    for password in data:
+        if password not in data_count:
+            data_count[password] = 1
+        else:
+            data_count[password] += 1
+    return data_count, {password: n for password, n in data_count.items() if n > 1}
+
+
 if __name__ == '__main__':
     train_set, _ = tools.extract_data()
     print(train_set)
@@ -45,6 +55,10 @@ if __name__ == '__main__':
     sizes.sort(reverse=False)
     print("Lowest password sizes:", sizes[0:20])
     # violin(s, consts.fig_path + "test.pdf")
+    train_set, eval_set = tools.extract_data()
+    print(get_pw_sizes(train_set))
+
+    print(get_duplicate(train_set))
 
     chars, counter = get_char_ratio(train_set)
     print(list(counter))
