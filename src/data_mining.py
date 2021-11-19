@@ -5,30 +5,19 @@ import tools
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from collections import Counter
+from collections import Counter, OrderedDict
 
 
 def get_pw_sizes(data):
     return [len(item) for item in data]
 
 
-def make_char_vocab(data):
-    char_count = 0
-    vocab = []
+def get_char_ratio(data):
     all_chars = []
     for password in data:
         all_chars.extend(password)
-        char_count += len(password)
-        # for char in password:
-        #     if char not in vocab:
-        #         vocab.append(char)
-        #     all_chars.append(char)
 
-    return list(dict.fromkeys(all_chars)), all_chars, len(all_chars)
-
-
-def get_char_ratio(data):
-    return dict(Counter(data))
+    return all_chars, OrderedDict({char: (n, n / len(all_chars)) for char, n in dict(Counter(all_chars)).items()})
 
 
 def violin(data, path):
@@ -48,15 +37,17 @@ def violin(data, path):
 if __name__ == '__main__':
     train_set, _ = tools.extract_data()
     print(train_set)
-    s = get_pw_sizes(train_set)
-    s.sort(reverse=True)
-    print("Highest password sizes:", s[0:20])
-    s.sort(reverse=False)
-    print("Lowest password sizes:", s[0:20])
-    # print(s)
+    sizes = get_pw_sizes(train_set)
+    sizes.sort(reverse=True)
+    print("Highest password sizes:", sizes[0:20])
+    lim = 30
+    print("Passwords longer than {}:".format(lim), len([length for length in sizes if length > lim]))
+    sizes.sort(reverse=False)
+    print("Lowest password sizes:", sizes[0:20])
     # violin(s, consts.fig_path + "test.pdf")
 
-    vocab, chars, length = make_char_vocab(train_set)
-    print(vocab)
-    print(get_char_ratio(chars))
-    print(length)
+    chars, counter = get_char_ratio(train_set)
+    print(list(counter))
+    for char, (n, ratio) in counter.items():
+        print(char, ":", n, "(", round(ratio * 100, 7), "% )")
+    print(len(chars))
