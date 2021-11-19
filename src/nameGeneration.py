@@ -65,9 +65,9 @@ n_letters = len(all_letters) + 1  # Plus EOS marker
 
 data = '../data/'
 filename = '../data/' + 'names/Russian.txt'
-filenameTrain = '../outputs/' + 'RussianTrain.txt'
-filenameTest = '../outputs/' + 'RussianTest.txt'
-models_path = '../outputs/models/'
+filenameTrain = '../output/' + 'RussianTrain.txt'
+filenameTest = '../output/' + 'RussianTest.txt'
+models_path = '../output/models/'
 
 def findFiles(path):
     return glob.glob(path)
