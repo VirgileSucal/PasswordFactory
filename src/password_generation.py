@@ -5,8 +5,6 @@ from time import time
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import string
-import consts
 
 from data_mining import get_char_ratio
 from nameGeneration import timeSince
