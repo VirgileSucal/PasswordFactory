@@ -5,6 +5,8 @@ from time import time
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import string
+import consts
 
 from data_mining import get_char_ratio
 from nameGeneration import timeSince
@@ -170,4 +172,7 @@ if __name__ == '__main__':
     train_set, eval_set = extract_data()
     print(get_vocab(train_set))
 
-
+    small_train_set = train_set[-1000:]
+    # print('train_set: ', len(train_set))
+    # print('eval_set: ', len(eval_set))
+    # print(small_train_set)
