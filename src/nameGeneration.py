@@ -60,7 +60,7 @@ if test_code:
 
 
 all_letters = string.ascii_letters + " .,;'-"
-print('all_letters: ', all_letters)
+# print('all_letters: ', all_letters)
 n_letters = len(all_letters) + 1  # Plus EOS marker
 
 data = '../data/'

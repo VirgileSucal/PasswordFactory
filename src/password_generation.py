@@ -5,7 +5,9 @@ from time import time
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-
+from torch.utils.data import DataLoader
+from torchtext.legacy.data import BucketIterator
+from torch.nn.utils.rnn import pad_sequence
 from data_mining import get_char_ratio
 from nameGeneration import timeSince
 from tools import extract_data
@@ -77,9 +79,15 @@ class LSTM(nn.Module):
             self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, input, hidden, cell):
-        input = self.encoder(input.view(1, -1))
+        # print(input)
+        print(input.size())
+        print(input.view(self.batch_size, 1, -1).size())
+        input = self.encoder(input.view(self.batch_size, 1, -1))
+
+        # print(input)
+        print(input.size())
         output, (hidden, cell) = self.lstm(input.view(self.batch_size, 1, -1), (hidden, cell))
-        output = self.decoder(output.view(1, -1))
+        output = self.decoder(output.view(self.batch_size, 1, -1))
 
         if bool(self.dropout_value):
             output = self.dropout(output)
@@ -114,17 +122,23 @@ def target_tensor(line):
 
 def random_batch(passwords, batch_size=1):
     assert batch_size > 0
+    print(batch_size)
     index = randint(0, len(passwords) - batch_size)
-    passwords_batch = passwords[index: batch_size]
-    input_batch = torch.stack([input_tensor(password) for password in passwords_batch])
-    target_batch = torch.stack([target_tensor(password) for password in passwords_batch])
+    print(index, batch_size)
+    passwords_batch = passwords[index: index + batch_size]
+    print(passwords_batch)
+    print([len(p) for p in passwords_batch])
+    input_batch = torch.stack([input_tensor(password) for password in passwords_batch]).long()
+    # TODO: fix different lengths
+    print(input_batch.size())
+    target_batch = torch.stack([target_tensor(password) for password in passwords_batch]).long()
     return input_batch, target_batch
 
 
 def train_lstm_epoch(model, input_batch, target_batch, criterion, learning_rate):
     target_batch.unsqueeze_(-1)
-    hidden = model.init_hidden()
-    cell = model.init_hidden()
+    hidden = model.init_h_c()
+    cell = model.init_h_c()
     output = None
 
     model.zero_grad()
@@ -132,6 +146,7 @@ def train_lstm_epoch(model, input_batch, target_batch, criterion, learning_rate)
     loss = 0
 
     for i in range(input_batch.size(0)):
+        # print(input_batch)
         output, (hidden, cell) = model(input_batch[i].to(device), hidden, cell)
         l = criterion(output.to(device), target_batch[i].to(device))
         loss += l
@@ -144,7 +159,7 @@ def train_lstm_epoch(model, input_batch, target_batch, criterion, learning_rate)
     return output, loss.item() / input_batch.size(0)
 
 
-def train_lstm(train_data, n_epochs):
+def train_lstm(lstm, train_data, n_epochs, criterion, learning_rate):
 
     assert train_data is not None
     assert n_epochs > 0
@@ -156,7 +171,7 @@ def train_lstm(train_data, n_epochs):
     print_every = n_epochs / 100
 
     for iter in range(1, n_epochs + 1):
-        output, loss = train_lstm_epoch(*random_batch(train_data))
+        output, loss = train_lstm_epoch(lstm, *random_batch(train_data, batch_size=batch_size), criterion, learning_rate)
         total_loss += loss
         if loss[0] < best_loss:
             best_loss = (loss, iter)
@@ -167,10 +182,55 @@ def train_lstm(train_data, n_epochs):
 
 
 if __name__ == '__main__':
+
+    hidden_size = 256
+    batch_size = 1
+    batch_size = 3
+    n_layers = 1
+    bidirectional = False
+    dropout_value = 0
+    use_softmax = False
+    n_epochs = 1
+    criterion = nn.CrossEntropyLoss()
+    learning_rate = 0.005
+
     train_set, eval_set = extract_data()
+    get_vocab(train_set)  # Init vocab
     print(get_vocab(train_set))
 
-    small_train_set = train_set[-1000:]
+    train_set = train_set[-1000:]
     # print('train_set: ', len(train_set))
     # print('eval_set: ', len(eval_set))
     # print(small_train_set)
+
+    train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    eval_dataloader = DataLoader(eval_set, batch_size=batch_size, shuffle=True)
+    train_iterator = BucketIterator(
+        train_dataloader,
+        batch_size,
+    # train_iterator, eval_iterator = BucketIterator.splits(
+    #     (train_dataloader, eval_dataloader),
+    #     (batch_size, batch_size),
+        sort_key=lambda s: len(s),
+        shuffle=False,
+        sort=False,
+        device=device
+    )
+
+    print(len(train_iterator))
+    train_iterator.create_batches()
+    for batch in train_iterator.batches:
+        print(batch)
+
+    lstm1 = LSTM(
+        input_size=get_vocab_size(),
+        hidden_size=hidden_size,
+        output_size=get_vocab_size(),
+        batch_size=batch_size,
+        n_layers=n_layers,
+        bidirectional=bidirectional,
+        dropout_value=dropout_value,
+        use_softmax=use_softmax
+    )
+
+    train_lstm(lstm1, train_set, n_epochs=n_epochs, criterion=criterion, learning_rate=learning_rate)
