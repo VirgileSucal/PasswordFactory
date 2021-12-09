@@ -12,6 +12,12 @@ from data_mining import get_char_ratio
 from nameGeneration import timeSince
 from tools import extract_data
 
+from sklearn.model_selection import RandomizedSearchCV
+from ray import tune  # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+
+
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
     print('CUDA AVAILABLE')
@@ -180,6 +186,18 @@ def train_lstm(lstm, train_data, n_epochs, criterion, learning_rate):
         if iter % print_every == 0:
             print('%s (%d %d%%) %.4f (%.4f)' % (timeSince(start), iter, iter / n_epochs * 100, total_loss / iter, loss))
 
+
+def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
+    # It looks like this method only works with sklearn classifier (we are working with Pytorch)
+
+    random_search = RandomizedSearchCV(model, param_distributions=hyper_parameters, n_iter=n_iter_search)
+    random_search.fit(train_dataset, validation_dataset)
+    print(random_search.cv_results_)
+    return random_search.cv_results_
+
+
+def get_best_hyper_parameters_pytorch():
+    pass
 
 if __name__ == '__main__':
 
