@@ -13,7 +13,7 @@ from nameGeneration import timeSince
 from tools import extract_data
 
 from sklearn.model_selection import RandomizedSearchCV
-from ray import tune  # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html
+from ray import tune  # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html , 'pip install ray[tune]'
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 
@@ -196,7 +196,7 @@ def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, 
     return random_search.cv_results_
 
 
-def get_best_hyper_parameters_pytorch():
+def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
     pass
 
 if __name__ == '__main__':
@@ -211,6 +211,19 @@ if __name__ == '__main__':
     n_epochs = 1
     criterion = nn.CrossEntropyLoss()
     learning_rate = 0.005
+
+    hyper_parameters = {
+        "hidden_size": None,
+        "batch_size": None,
+        "n_layers": None,
+        "bidirectional": None,
+        "dropout_value": None,
+        "use_softmax": None,
+        "n_epochs": None,
+        "criterion": None,
+        "learning_rate": None
+    }
+    # print(hyper_parameters)
 
     train_set, eval_set = extract_data()
     get_vocab(train_set)  # Init vocab
