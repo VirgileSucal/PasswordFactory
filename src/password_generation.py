@@ -1,5 +1,6 @@
 #! /bin/env python3
 import string
+import sys
 from random import randint
 from time import time
 import torch
@@ -9,7 +10,7 @@ from torch.utils.data import DataLoader
 from torchtext.legacy.data import BucketIterator
 from torch.nn.utils.rnn import pad_sequence
 from data_mining import get_char_ratio
-from nameGeneration import timeSince, progress, max_length, progressPercent, timeSinceStart, getLines
+from nameGeneration import timeSince, max_length, progressPercent, timeSinceStart, getLines
 from tools import extract_data
 
 from sklearn.model_selection import RandomizedSearchCV
@@ -69,6 +70,7 @@ class LSTM(nn.Module):
         self.bidirectional = bidirectional
         self.dropout_value = dropout_value
         self.use_softmax = use_softmax
+        self.use_softmax = False
 
         self.encoder = nn.Embedding(self.input_size, self.hidden_size)  # input_size = vocab size, but entry is index, not one_hot
         self.lstm = nn.LSTM(
@@ -84,7 +86,7 @@ class LSTM(nn.Module):
         if bool(self.dropout_value):
             self.dropout = nn.Dropout(self.dropout_value)
         if self.use_softmax:
-            self.softmax = nn.LogSoftmax(dim=1)
+            self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input, hidden, cell):
         input = self.encoder(input)
@@ -156,6 +158,12 @@ def train_lstm_epoch(model, batches, criterion, learning_rate):
         # print(input_batch)
         # print(input_batch.size())
         output, (hidden, cell) = model(input_batch.to(device), hidden.to(device), cell.to(device))
+        # print()
+        # print()
+        # print(output)
+        # print(target_batch)
+        # print()
+        # print()
         l = criterion(output.to(device), target_batch.type(torch.FloatTensor).to(device))
         loss += l
 
@@ -206,9 +214,12 @@ def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print
 
             current_epoch_batches = []
 
+        # if epoch >= 20:  # TODO: Only for tests (remove it)
+        #     break
+
 
 def argmax(float_list):
-    max_val = 0
+    max_val = float_list[0]
     max_idx = 0
     for i in range(len(float_list)):
         if float_list[i] > max_val:
@@ -216,6 +227,20 @@ def argmax(float_list):
             max_idx = i
 
     return max_idx
+
+
+def progress(total, acc, start, epoch, l):
+    bar_len = 50
+    filled_len = int(round(bar_len * epoch / float(total)))
+    percents = round(100.0 * epoch / float(total), 1)
+
+    if filled_len == 0:
+        bar = '>' * filled_len + ' ' * (bar_len - filled_len)
+    else:
+        bar = '=' * (filled_len - 1) + '>' + ' ' * (bar_len - filled_len)
+
+    sys.stdout.write('[%s] %s%s epoch: %d ; acc: %.3f %% ; size = %d names => coverage of %.3f %% on %s \r' % (bar, percents, '%', epoch, (100 * acc / epoch), l, (100 * acc / l), timeSinceStart(start)))
+    sys.stdout.flush()
 
 
 def generate_passwords(decoder, start_letter: str):
@@ -235,6 +260,7 @@ def generate_passwords(decoder, start_letter: str):
 
         for i in range(max_length):
             output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
+            # print(output)
             predicted_letters_indices = [argmax(letter_one_hot[0]) for letter_one_hot in output]
             # print(predicted_letters_indices)
             if sum(predicted_letters_indices) == 0:  # If letter is EOS
@@ -243,7 +269,8 @@ def generate_passwords(decoder, start_letter: str):
             next_letters = [get_vocab()[predicted] for predicted in predicted_letters_indices]
             for i in range(len(output_passwords)):
                 output_passwords[i] += next_letters[i]
-            input = input_tensor(next_letters)
+            # input = input_tensor(next_letters)
+            input = pad_sequence([torch.LongTensor([input_tensor(letter)]) for letter in next_letters], batch_first=True).long()  # It will generate len(batch) passwords each time.
 
         return output_passwords
 
@@ -261,9 +288,11 @@ def test(model, nb_samples, test_data, percent):
         predicted_passwords = generate_passwords(model, starting_letter)
         # print("predicted", predicted_passwords)
 
-        for predicted in predicted_passwords:
-            if predicted in test_data:
-                accuracy = accuracy + model.batch_size
+        # for predicted in predicted_passwords:
+        #     if predicted in test_data:
+        #         accuracy = accuracy + model.batch_size
+        if predicted_passwords[0] in test_data:
+            accuracy = accuracy + model.batch_size
 
         progress(total=nb_samples, acc=accuracy, start=start, epoch=i, l=len(test_data))
 
@@ -303,9 +332,11 @@ if __name__ == '__main__':
     use_softmax = False
     use_softmax = True
     n_epochs = 1
-    n_epochs = 10
+    n_epochs = 1000
     criterion = nn.CrossEntropyLoss()
     learning_rate = 0.005
+    learning_rate = 0.05
+    learning_rate = 0.1
     print_every = 10
     print_every = None
     print_every = 1
@@ -328,6 +359,7 @@ if __name__ == '__main__':
     # print(get_vocab(train_set))
 
     # train_set = train_set[-10000:]
+    # eval_set = eval_set[:100]
 
     batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     batch_eval_dataloader = DataLoader(eval_set, batch_size=batch_size, shuffle=True)
@@ -348,6 +380,8 @@ if __name__ == '__main__':
     )
 
     train_lstm(lstm1, batch_train_dataloader, n_epochs=n_epochs, criterion=criterion, learning_rate=learning_rate, print_every=print_every)
+
+    print("\n\nEVAL\n")
 
     test(lstm1, len(batch_eval_dataloader), batch_eval_dataloader, 1)
 
