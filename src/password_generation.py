@@ -1,5 +1,5 @@
 #! /bin/env python3
-
+import string
 from random import randint
 from time import time
 import torch
@@ -9,8 +9,14 @@ from torch.utils.data import DataLoader
 from torchtext.legacy.data import BucketIterator
 from torch.nn.utils.rnn import pad_sequence
 from data_mining import get_char_ratio
-from nameGeneration import timeSince
+from nameGeneration import timeSince, progress, max_length, progressPercent, timeSinceStart, getLines
 from tools import extract_data
+
+from sklearn.model_selection import RandomizedSearchCV
+from ray import tune  # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html , 'pip install ray[tune]'
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -18,6 +24,8 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
     print('ONLY CPU AVAILABLE')
+
+device = torch.device("cpu")
 
 __vocab = None
 __vocab_size = None
@@ -192,6 +200,121 @@ def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print
             current_epoch_batches = []
 
 
+def sample(decoder, start_letters='ABC'):
+    with torch.no_grad():  # no need to track history in sampling
+
+        hidden = decoder.init_h_c()
+        cell = decoder.init_h_c()
+
+        if len(start_letters) > 1:
+            print("1")
+            for i in range(len(start_letters)):
+                input = input_tensor(start_letters[i])
+                # print(start_letters[i], ' ', hidden)
+                output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
+
+            topv, topi = output.topk(1)
+            topi = topi[0][0]
+            if topi == get_vocab_size() - 1:
+                return start_letters
+
+            letter = get_vocab()[topi]
+            input = input_tensor(letter)
+        else:
+            print("2")
+            # input = input_tensor(start_letters)
+            input = pad_sequence([torch.LongTensor([input_tensor(start_letters)]) for _ in range(3)], batch_first=True).long()
+            print(input)
+            print(input.size())
+
+        output_name = start_letters
+
+        for i in range(max_length):
+            output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
+            topv, topi = output.topk(1)
+            topi = topi[0][0]
+            if topi == get_vocab_size() - 1:
+                break
+            else:
+                letter = get_vocab()[topi]
+                output_name += letter
+            input = input_tensor(letter)
+
+        return output_name
+
+
+def test(model, nb_samples, test_data, percent):
+
+    start = time()
+    accuracy = 0
+    predicted = "a"
+    predicted_current = []
+    nb_samples = len(test_data)
+
+    if nb_samples > 0:
+
+        for i in range(1, nb_samples + 1):
+            nc = 1  # randint(1, max_length/2 - 1)
+
+            while predicted in predicted_current:
+                starting_letters = ""
+                for n in range(nc):
+                    rc = randint(1, get_vocab_size())
+                    starting_letters = starting_letters + get_vocab()[rc]
+
+                predicted = sample(model, starting_letters).lower()
+
+            predicted_current.append(predicted)
+
+            if predicted in test_data:
+                accuracy = accuracy + 1
+
+            progress(total=nb_samples, acc=accuracy, start=start, epoch=i, l=len(test_data))
+
+        accuracy = 100 * accuracy / nb_samples
+
+        print('\nAccuracy: ', accuracy, '%')
+
+    else:
+        i = 0
+        l = len(test_data)
+        p = int(percent / 100 * l)
+        while accuracy < p:
+            # nc = randint(1, int(max_length / 2 - 1))
+            nc = 1
+
+            while predicted in predicted_current:
+                starting_letters = ""
+                for n in range(nc):
+                    rc = randint(0, len(string.ascii_uppercase) - 1)
+                    starting_letters = starting_letters + string.ascii_uppercase[rc]
+
+                predicted = sample(model, starting_letters).lower()
+
+            predicted_current.append(predicted)
+
+            if predicted in test_data:
+                accuracy = accuracy + 1
+
+            i = i + 1
+            progressPercent(totalNames=l, start=start, names=accuracy, p=percent, samplesGenerated=i)
+
+        print(percent + ' % of all names (', len(test_data), ') reached in ', i, 'iterations (', timeSinceStart(start),
+              ' s)...')
+
+
+def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
+    # It looks like this method only works with sklearn classifier (we are working with Pytorch)
+
+    random_search = RandomizedSearchCV(model, param_distributions=hyper_parameters, n_iter=n_iter_search)
+    random_search.fit(train_dataset, validation_dataset)
+    print(random_search.cv_results_)
+    return random_search.cv_results_
+
+
+def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
+    pass
+
 if __name__ == '__main__':
 
     train_set, eval_set = extract_data()
@@ -216,6 +339,23 @@ if __name__ == '__main__':
     print_every = 10
     print_every = None
 
+    hyper_parameters = {
+        "hidden_size": None,
+        "batch_size": None,
+        "n_layers": None,
+        "bidirectional": None,
+        "dropout_value": None,
+        "use_softmax": None,
+        "n_epochs": None,
+        "criterion": None,
+        "learning_rate": None
+    } # TODO
+    # print(hyper_parameters)
+
+    train_set, eval_set = extract_data()
+    get_vocab(train_set)  # Init vocab
+    print(get_vocab(train_set))
+
     train_set = train_set[-1000:]
 
     batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
@@ -237,3 +377,6 @@ if __name__ == '__main__':
     )
 
     train_lstm(lstm1, batch_train_dataloader, n_epochs=n_epochs, criterion=criterion, learning_rate=learning_rate, print_every=print_every)
+
+    test(lstm1, len(batch_eval_dataloader), batch_eval_dataloader, 1)
+
