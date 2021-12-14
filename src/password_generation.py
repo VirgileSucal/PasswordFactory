@@ -88,6 +88,8 @@ class LSTM(nn.Module):
 
     def forward(self, input, hidden, cell):
         input = self.encoder(input)
+        # print("f", input)
+        # print("f", input.size())
         output, (hidden, cell) = self.lstm(input, (hidden, cell))
         output = self.decoder(output)
 
@@ -148,6 +150,11 @@ def train_lstm_epoch(model, batches, criterion, learning_rate):
     loss = 0
 
     for input_batch, target_batch in batches:
+        # print(input_batch.size(0), hidden.size()[1])
+        if input_batch.size(0) != hidden.size()[1]:
+            continue
+        # print(input_batch)
+        # print(input_batch.size())
         output, (hidden, cell) = model(input_batch.to(device), hidden.to(device), cell.to(device))
         l = criterion(output.to(device), target_batch.type(torch.FloatTensor).to(device))
         loss += l
@@ -200,107 +207,69 @@ def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print
             current_epoch_batches = []
 
 
-def sample(decoder, start_letters='ABC'):
+def argmax(float_list):
+    max_val = 0
+    max_idx = 0
+    for i in range(len(float_list)):
+        if float_list[i] > max_val:
+            max_val = float_list[i]
+            max_idx = i
+
+    return max_idx
+
+
+def generate_passwords(decoder, start_letter: str):
     with torch.no_grad():  # no need to track history in sampling
 
         hidden = decoder.init_h_c()
         cell = decoder.init_h_c()
 
-        if len(start_letters) > 1:
-            print("1")
-            for i in range(len(start_letters)):
-                input = input_tensor(start_letters[i])
-                # print(start_letters[i], ' ', hidden)
-                output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
-
-            topv, topi = output.topk(1)
-            topi = topi[0][0]
-            if topi == get_vocab_size() - 1:
-                return start_letters
-
-            letter = get_vocab()[topi]
-            input = input_tensor(letter)
-        else:
-            print("2")
-            # input = input_tensor(start_letters)
-            input = pad_sequence([torch.LongTensor([input_tensor(start_letters)]) for _ in range(3)], batch_first=True).long()
-            print(input)
-            print(input.size())
-
-        output_name = start_letters
+        output_passwords = [start_letter[0] for _ in range(decoder.batch_size)]
+        # input = input_tensor(start_letters)
+        input = pad_sequence([torch.LongTensor([input_tensor(letter)]) for letter in output_passwords], batch_first=True).long()  # It will generate len(batch) passwords each time.
+        # print(input)
+        # print(input.size())
+        # input = torch.unsqueeze(input, dim=-1)
+        # print(input)
+        # print(input.size())
 
         for i in range(max_length):
             output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
-            topv, topi = output.topk(1)
-            topi = topi[0][0]
-            if topi == get_vocab_size() - 1:
+            predicted_letters_indices = [argmax(letter_one_hot[0]) for letter_one_hot in output]
+            # print(predicted_letters_indices)
+            if sum(predicted_letters_indices) == 0:  # If letter is EOS
                 break
-            else:
-                letter = get_vocab()[topi]
-                output_name += letter
-            input = input_tensor(letter)
 
-        return output_name
+            next_letters = [get_vocab()[predicted] for predicted in predicted_letters_indices]
+            for i in range(len(output_passwords)):
+                output_passwords[i] += next_letters[i]
+            input = input_tensor(next_letters)
+
+        return output_passwords
 
 
 def test(model, nb_samples, test_data, percent):
 
     start = time()
     accuracy = 0
-    predicted = "a"
-    predicted_current = []
     nb_samples = len(test_data)
 
-    if nb_samples > 0:
+    for i in range(1, nb_samples + 1):
+        random_index = randint(1, get_vocab_size() - 1)
+        starting_letter = get_vocab()[random_index]
 
-        for i in range(1, nb_samples + 1):
-            nc = 1  # randint(1, max_length/2 - 1)
+        predicted_passwords = generate_passwords(model, starting_letter)
+        # print("predicted", predicted_passwords)
 
-            while predicted in predicted_current:
-                starting_letters = ""
-                for n in range(nc):
-                    rc = randint(1, get_vocab_size())
-                    starting_letters = starting_letters + get_vocab()[rc]
-
-                predicted = sample(model, starting_letters).lower()
-
-            predicted_current.append(predicted)
-
+        for predicted in predicted_passwords:
             if predicted in test_data:
-                accuracy = accuracy + 1
+                accuracy = accuracy + model.batch_size
 
-            progress(total=nb_samples, acc=accuracy, start=start, epoch=i, l=len(test_data))
+        progress(total=nb_samples, acc=accuracy, start=start, epoch=i, l=len(test_data))
 
-        accuracy = 100 * accuracy / nb_samples
+    accuracy = 100 * accuracy / nb_samples
 
-        print('\nAccuracy: ', accuracy, '%')
-
-    else:
-        i = 0
-        l = len(test_data)
-        p = int(percent / 100 * l)
-        while accuracy < p:
-            # nc = randint(1, int(max_length / 2 - 1))
-            nc = 1
-
-            while predicted in predicted_current:
-                starting_letters = ""
-                for n in range(nc):
-                    rc = randint(0, len(string.ascii_uppercase) - 1)
-                    starting_letters = starting_letters + string.ascii_uppercase[rc]
-
-                predicted = sample(model, starting_letters).lower()
-
-            predicted_current.append(predicted)
-
-            if predicted in test_data:
-                accuracy = accuracy + 1
-
-            i = i + 1
-            progressPercent(totalNames=l, start=start, names=accuracy, p=percent, samplesGenerated=i)
-
-        print(percent + ' % of all names (', len(test_data), ') reached in ', i, 'iterations (', timeSinceStart(start),
-              ' s)...')
+    print('\nAccuracy: ', accuracy, '%')
 
 
 def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
@@ -314,6 +283,7 @@ def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, 
 
 def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
     pass
+
 
 if __name__ == '__main__':
 
@@ -338,6 +308,7 @@ if __name__ == '__main__':
     learning_rate = 0.005
     print_every = 10
     print_every = None
+    print_every = 1
 
     hyper_parameters = {
         "hidden_size": None,
@@ -354,16 +325,16 @@ if __name__ == '__main__':
 
     train_set, eval_set = extract_data()
     get_vocab(train_set)  # Init vocab
-    print(get_vocab(train_set))
+    # print(get_vocab(train_set))
 
-    train_set = train_set[-1000:]
+    # train_set = train_set[-10000:]
 
     batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     batch_eval_dataloader = DataLoader(eval_set, batch_size=batch_size, shuffle=True)
 
-    print(len(batch_train_dataloader))
-    for batch in batch_train_dataloader:
-        print(batch)
+    # print(len(batch_train_dataloader))
+    # for batch in batch_train_dataloader:
+    #     print(batch)
 
     lstm1 = LSTM(
         input_size=input_size,
