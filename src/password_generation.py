@@ -1,5 +1,6 @@
 #! /bin/env python3
 import string
+from os import path
 from random import randint
 from time import time
 import torch
@@ -11,6 +12,7 @@ from torch.nn.utils.rnn import pad_sequence
 from data_mining import get_char_ratio
 from nameGeneration import timeSince, progress, max_length, progressPercent, timeSinceStart, getLines
 from tools import extract_data
+import consts
 
 from sklearn.model_selection import RandomizedSearchCV
 from ray import tune  # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html , 'pip install ray[tune]'
@@ -315,6 +317,26 @@ def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, 
 def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
     pass
 
+
+def save_model(model, model_name):
+    model_name += ".pt"
+    model_path = consts.models_dir + model_name
+    torch.save(model, model_path)
+    print('Model saved in: ', model_path)
+
+
+def load_model(model_name):
+    model_name += ".pt"
+    model_path = consts.models_dir + model_name
+    if path.exists(model_path):
+        model = torch.load(model_path)
+        model.eval().to(device)
+        print("model "+model_name+" loaded")
+        return model
+    else:
+        print("model " + model_name + " doesn't exist")
+
+
 if __name__ == '__main__':
 
     train_set, eval_set = extract_data()
@@ -375,6 +397,11 @@ if __name__ == '__main__':
         dropout_value=dropout_value,
         use_softmax=use_softmax
     )
+
+    save_model(lstm1, "neptune")
+    model_test = load_model("neptune")
+    model_test1 = load_model("jupiter")
+    # model_test1.eval()
 
     train_lstm(lstm1, batch_train_dataloader, n_epochs=n_epochs, criterion=criterion, learning_rate=learning_rate, print_every=print_every)
 
