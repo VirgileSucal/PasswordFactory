@@ -28,8 +28,6 @@ else:
     device = torch.device("cpu")
     print('ONLY CPU AVAILABLE')
 
-# device = torch.device("cpu")
-
 __vocab = None
 __vocab_size = None
 
