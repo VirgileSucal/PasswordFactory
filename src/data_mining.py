@@ -64,4 +64,10 @@ if __name__ == '__main__':
     print(list(counter))
     for char, (n, ratio) in counter.items():
         print(char, ":", n, "(", round(ratio * 100, 7), "% )")
+
+    lim_ratio = 0.001
+    print("Char that appears less than {}% :".format(lim_ratio))
+    for char, (n, ratio) in counter.items():
+        if(round(ratio * 100, 7) <= lim_ratio):
+            print(char, ":", n, "(", round(ratio * 100, 7), "% )")
     print(len(chars))
