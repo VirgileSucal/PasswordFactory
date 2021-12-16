@@ -11,10 +11,11 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchtext.legacy.data import BucketIterator
 from torch.nn.utils.rnn import pad_sequence
+import tools
 from data_mining import get_char_ratio
-from tools import extract_data
+from tools import extract_data, parse_bools
 import consts
-
+from argparse import ArgumentParser
 from sklearn.model_selection import RandomizedSearchCV
 from ray import tune  # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html , 'pip install ray[tune]'
 from ray.tune import CLIReporter
@@ -378,10 +379,27 @@ def load_model(model_name):
         print("model "+model_name+" loaded")
         return model
     else:
-        print("model " + model_name + " doesn't exist")
+        print("model \"" + model_name + "\" doesn't exist")
+
+
+def get_args():
+
+    parser = ArgumentParser()
+    parser.add_argument("-r", "--run", default=consts.default_model_file, type=str, help="name of the model saved file")
+    parser.add_argument("-m", "--model", default=str(path.join(consts.models_dir, consts.default_model_file)), type=str, help="Path of the model to save for training or to load for evaluating/testing (eval/test) [path/to/the/model]")
+    # parser.add_argument('-n', '--n', default=consts.default_n_samples, type=int, help="number of samples to generate [< 1000].")
+    parser.add_argument("-t", "--train", default=True, type=str, help="Train the model (if False, load the model) [default True]")
+    parser.add_argument("-e", "--eval", default=True, type=str, help="Evaluate the model [default True]")
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
+    
+    args = get_args()
+    have_to_train = tools.parse_bools(args.train)
+    have_to_eval = tools.parse_bools(args.eval)
+    model_path = args.model
+    tools.init_dir(model_path)
 
     train_set, eval_set = extract_data()
     print(get_vocab(train_set))
@@ -393,9 +411,9 @@ if __name__ == '__main__':
     output_size = get_vocab_size()
     batch_size = 1
     # batch_size = 3
-    batch_size = 10
-    batch_size = 64
-    batch_size = 128
+    # batch_size = 10
+    # batch_size = 64
+    # batch_size = 128
     n_layers = 1
     bidirectional = False
     dropout_value = 0
@@ -426,7 +444,7 @@ if __name__ == '__main__':
         "n_epochs": None,
         "criterion": None,
         "learning_rate": None
-    } # TODO
+    }  # TODO
     # print(hyper_parameters)
 
     train_set, eval_set = extract_data()
@@ -444,26 +462,37 @@ if __name__ == '__main__':
     # for batch in batch_train_dataloader:
     #     print(batch)
 
-    lstm1 = LSTM(
-        input_size=input_size,
-        hidden_size=hidden_size,
-        output_size=output_size,
-        batch_size=batch_size,
-        n_layers=n_layers,
-        bidirectional=bidirectional,
-        dropout_value=dropout_value,
-        use_softmax=use_softmax
-    )
+    lstm1 = None
 
-    # save_model(lstm1, "neptune")
-    # model_test = load_model("neptune")
-    # model_test1 = load_model("jupiter")
-    # model_test1.eval()
+    print(have_to_train)
+    print(type(have_to_train))
+    if have_to_train:
+        lstm1 = LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size,
+            batch_size=batch_size,
+            n_layers=n_layers,
+            bidirectional=bidirectional,
+            dropout_value=dropout_value,
+            use_softmax=use_softmax
+        )
+        print("Train model", model_path)
+        train_lstm(
+            lstm1,
+            batch_train_dataloader,
+            n_epochs=n_epochs,
+            criterion=criterion,
+            learning_rate=learning_rate,
+            print_every=print_every
+        )
+        save_model(lstm1, model_path)
+    else:
+        print("Load model", model_path)
+        lstm1 = load_model(model_path)
 
-    train_lstm(lstm1, batch_train_dataloader, n_epochs=n_epochs, criterion=criterion, learning_rate=learning_rate, print_every=print_every)
-
-    print("\n\nEVAL\n")
-
-    # test(lstm1, batch_eval_dataloader)
-    test(lstm1, eval_set, number_of_first_letters, max_length)
+    if have_to_eval:
+        print("\n\nEVAL\n")
+        # test(lstm1, batch_eval_dataloader)
+        test(lstm1, eval_set, number_of_first_letters, max_length)
 

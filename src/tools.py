@@ -24,3 +24,6 @@ def init_dir(path):
     if not exists(dirname(path)):
         makedirs(dirname(path))
 
+
+def parse_bools(boolean_str):
+    return consts.bools[str(boolean_str).lower()]
