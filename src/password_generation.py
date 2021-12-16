@@ -1,6 +1,7 @@
 #! /bin/env python3
 import math
 import string
+from os import path
 import sys
 from random import randint
 from time import time
@@ -12,6 +13,7 @@ from torchtext.legacy.data import BucketIterator
 from torch.nn.utils.rnn import pad_sequence
 from data_mining import get_char_ratio
 from tools import extract_data
+import consts
 
 from sklearn.model_selection import RandomizedSearchCV
 from ray import tune  # https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html , 'pip install ray[tune]'
@@ -25,8 +27,6 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
     print('ONLY CPU AVAILABLE')
-
-device = torch.device("cpu")
 
 __vocab = None
 __vocab_size = None
@@ -81,6 +81,7 @@ class LSTM(nn.Module):
         self.use_softmax = False
 
         self.encoder = nn.Embedding(self.input_size, self.hidden_size)  # input_size = vocab size, but entry is index, not one_hot
+        self.encoder.to(device)
         self.lstm = nn.LSTM(
             input_size=self.hidden_size,
             hidden_size=self.hidden_size,
@@ -89,12 +90,16 @@ class LSTM(nn.Module):
             dropout=self.dropout_value,
             batch_first=True
         )
+        self.lstm.to(device)
         self.decoder = nn.Linear(self.hidden_size, self.output_size)
+        self.decoder.to(device)
 
         if bool(self.dropout_value):
             self.dropout = nn.Dropout(self.dropout_value)
+            self.dropout.to(device)
         if self.use_softmax:
             self.softmax = nn.Softmax(dim=1)
+            self.softmax.to(device)
 
     def forward(self, input, hidden, cell):
         input = self.encoder(input)
@@ -357,6 +362,25 @@ def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, 
     pass
 
 
+def save_model(model, model_name):
+    model_name += ".pt"
+    model_path = consts.models_dir + model_name
+    torch.save(model, model_path)
+    print('Model saved in: ', model_path)
+
+
+def load_model(model_name):
+    model_name += ".pt"
+    model_path = consts.models_dir + model_name
+    if path.exists(model_path):
+        model = torch.load(model_path)
+        model.eval().to(device)
+        print("model "+model_name+" loaded")
+        return model
+    else:
+        print("model " + model_name + " doesn't exist")
+
+
 if __name__ == '__main__':
 
     train_set, eval_set = extract_data()
@@ -379,7 +403,8 @@ if __name__ == '__main__':
     # use_softmax = True
     n_epochs = 1
     n_epochs = 1000
-    n_epochs = 100
+    n_epochs = 10000
+    # n_epochs = 100
     # n_epochs = 256
     criterion = nn.CrossEntropyLoss()
     learning_rate = 0.005
@@ -429,6 +454,11 @@ if __name__ == '__main__':
         dropout_value=dropout_value,
         use_softmax=use_softmax
     )
+
+    # save_model(lstm1, "neptune")
+    # model_test = load_model("neptune")
+    # model_test1 = load_model("jupiter")
+    # model_test1.eval()
 
     train_lstm(lstm1, batch_train_dataloader, n_epochs=n_epochs, criterion=criterion, learning_rate=learning_rate, print_every=print_every)
 
