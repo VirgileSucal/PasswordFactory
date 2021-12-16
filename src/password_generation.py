@@ -3,6 +3,7 @@ import math
 import string
 from os import path
 import sys
+from os.path import abspath, dirname
 from random import randint
 from time import time
 import torch
@@ -365,16 +366,20 @@ def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, 
 
 def save_model(model, model_name):
     model_name += ".pt"
-    model_path = consts.models_dir + model_name
+    model_path = path.join(dirname(abspath(__file__)), consts.models_dir, model_name)
+    tools.init_dir(model_path)
+    # model_path = consts.models_dir + model_name
     torch.save(model, model_path)
     print('Model saved in: ', model_path)
 
 
 def load_model(model_name):
     model_name += ".pt"
-    model_path = consts.models_dir + model_name
+    # model_path = path.join(dirname(abspath(__file__)), model_name)
+    # model_path = model_name
+    model_path = path.join(dirname(abspath(__file__)), consts.models_dir, model_name)
     if path.exists(model_path):
-        model = torch.load(model_path)
+        model = torch.load(model_path, map_location=device)
         model.eval().to(device)
         print("model "+model_name+" loaded")
         return model
@@ -390,6 +395,7 @@ def get_args():
     # parser.add_argument('-n', '--n', default=consts.default_n_samples, type=int, help="number of samples to generate [< 1000].")
     parser.add_argument("-t", "--train", default=True, type=str, help="Train the model (if False, load the model) [default True]")
     parser.add_argument("-e", "--eval", default=True, type=str, help="Evaluate the model [default True]")
+    parser.add_argument("-d", "--debug", default=False, type=str, help="Activate debug code [default False]")
     return parser.parse_args()
 
 
@@ -397,9 +403,17 @@ if __name__ == '__main__':
     
     args = get_args()
     have_to_train = tools.parse_bools(args.train)
+    # have_to_train = args.train
     have_to_eval = tools.parse_bools(args.eval)
-    model_path = args.model
-    tools.init_dir(model_path)
+    # have_to_eval = args.eval
+    model_name = args.model
+    debug = tools.parse_bools(args.debug)
+    # debug = args.debug
+    # tools.init_dir(model_name)
+    print(model_name)
+
+    # have_to_train = True
+    # have_to_eval = False
 
     train_set, eval_set = extract_data()
     print(get_vocab(train_set))
@@ -422,6 +436,7 @@ if __name__ == '__main__':
     n_epochs = 1
     n_epochs = 1000
     n_epochs = 10000
+    n_epochs = 1000000
     # n_epochs = 100
     # n_epochs = 256
     criterion = nn.CrossEntropyLoss()
@@ -444,15 +459,17 @@ if __name__ == '__main__':
         "n_epochs": None,
         "criterion": None,
         "learning_rate": None
-    }  # TODO
+    }
     # print(hyper_parameters)
 
     train_set, eval_set = extract_data()
     get_vocab(train_set)  # Init vocab
     # print(get_vocab(train_set))
 
-    # train_set = train_set[-1000:]
-    # eval_set = eval_set[:100]
+    if debug:
+        print("Debug mode !")
+        train_set = train_set[-1000:]
+        # eval_set = eval_set[:100]
 
     batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     # batch_eval_dataloader = DataLoader(eval_set, batch_size=batch_size, shuffle=True)
@@ -464,8 +481,7 @@ if __name__ == '__main__':
 
     lstm1 = None
 
-    print(have_to_train)
-    print(type(have_to_train))
+    print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
     if have_to_train:
         lstm1 = LSTM(
             input_size=input_size,
@@ -477,7 +493,19 @@ if __name__ == '__main__':
             dropout_value=dropout_value,
             use_softmax=use_softmax
         )
-        print("Train model", model_path)
+        model_name = "_-_".join([
+            "hidden_size={}".format(hidden_size),
+            "n_layers={}".format(n_layers),
+            "bidirectional={}".format(bidirectional),
+            "dropout_value={}".format(dropout_value),
+            "use_softmax={}".format(use_softmax),
+            "batch_size={}".format(batch_size),
+            "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
+            "train_size={}".format(len(train_set)),
+            "{}".format(time())
+        ])
+        # model_name = "lstm_-_hidden_size={}_-_n_layers={}_-_bidirectional={}_-_dropout_value={}_-_use_softmax={}_-_batch_size={}_-_epoch_size={}_-_train_size={}_-_{}".format(hidden_size, n_layers, bidirectional, dropout_value, use_softmax, batch_size, len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader)), len(train_set), time())
+        print("Train model \"{}\"".format(model_name))
         train_lstm(
             lstm1,
             batch_train_dataloader,
@@ -486,10 +514,10 @@ if __name__ == '__main__':
             learning_rate=learning_rate,
             print_every=print_every
         )
-        save_model(lstm1, model_path)
+        save_model(lstm1, model_name)
     else:
-        print("Load model", model_path)
-        lstm1 = load_model(model_path)
+        print("Load model \"{}\"".format(model_name))
+        lstm1 = load_model(model_name)
 
     if have_to_eval:
         print("\n\nEVAL\n")
