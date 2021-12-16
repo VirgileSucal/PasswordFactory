@@ -45,7 +45,7 @@ def get_vocab(data=None):
     global __vocab_size
     assert not (__vocab is None and data is None)
     if __vocab is None:
-        __vocab = "\0" + "".join(list(get_char_ratio(data)[1].keys()))
+        __vocab = "\0\0" + "".join(list(get_char_ratio(data)[1].keys()))  # EOS is index 1, because index is used for initializing one-hots.
         __vocab_size = len(__vocab)
     return __vocab
 
@@ -110,8 +110,16 @@ class LSTM(nn.Module):
 
         return output, (hidden, cell)
 
-    def init_h_c(self):
+    def init_h_c_with_zeros(self):
         return Variable(torch.zeros(
+            (1 + int(self.bidirectional)) * self.n_layers,
+            self.batch_size,
+            self.hidden_size,
+            device=device
+        ))
+
+    def init_h_c(self):
+        return Variable(torch.rand(
             (1 + int(self.bidirectional)) * self.n_layers,
             self.batch_size,
             self.hidden_size,
@@ -277,7 +285,7 @@ def generate_passwords(decoder, start_letter: str, max_length: int = 20):
             # print(predicted_letters_indices)
             # if sum(predicted_letters_indices) == 0:  # If letter is EOS
             #     break
-            if predicted_letters_indices[0] == 0:  # If letter is EOS
+            if predicted_letters_indices[0] <= 1:  # If letter is EOS
                 break
 
             next_letters = [get_vocab()[predicted] for predicted in predicted_letters_indices]
@@ -310,13 +318,16 @@ def test(model, test_data, number_of_first_letters=1):
 
     print("Eval data size:", nb_samples)
 
-    # for i in range(1, nb_samples + 1):
-    i = 0
-    for starting_letter in get_first_letters(number_of_first_letters):
-        # random_index = randint(1, get_vocab_size() - 1)
-        # starting_letter = get_vocab()[random_index]
-        # # random_index = randint(1, get_vocab_size() - 1)
-        # # starting_letter += get_vocab()[random_index]
+    # i = 0
+    # for starting_letter in get_first_letters(number_of_first_letters):
+    for i in range(1, nb_samples + 1):
+        starting_letter = ""
+        for _ in range(number_of_first_letters):
+
+            random_index = randint(1, get_vocab_size() - 1)
+            starting_letter += get_vocab()[random_index]
+            # random_index = randint(1, get_vocab_size() - 1)
+            # starting_letter += get_vocab()[random_index]
         i += 1
 
         predicted_passwords = generate_passwords(model, starting_letter)
@@ -379,6 +390,7 @@ if __name__ == '__main__':
     print_every = 10
     print_every = None
     print_every = 1
+    number_of_first_letters = 1
 
     hyper_parameters = {
         "hidden_size": None,
@@ -424,5 +436,5 @@ if __name__ == '__main__':
     print("\n\nEVAL\n")
 
     # test(lstm1, batch_eval_dataloader)
-    test(lstm1, eval_set, 3)
+    test(lstm1, eval_set, number_of_first_letters)
 
