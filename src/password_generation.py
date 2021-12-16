@@ -28,7 +28,7 @@ else:
     device = torch.device("cpu")
     print('ONLY CPU AVAILABLE')
 
-device = torch.device("cpu")
+# device = torch.device("cpu")
 
 __vocab = None
 __vocab_size = None
@@ -83,6 +83,7 @@ class LSTM(nn.Module):
         self.use_softmax = False
 
         self.encoder = nn.Embedding(self.input_size, self.hidden_size)  # input_size = vocab size, but entry is index, not one_hot
+        self.encoder.to(device)
         self.lstm = nn.LSTM(
             input_size=self.hidden_size,
             hidden_size=self.hidden_size,
@@ -91,12 +92,16 @@ class LSTM(nn.Module):
             dropout=self.dropout_value,
             batch_first=True
         )
+        self.lstm.to(device)
         self.decoder = nn.Linear(self.hidden_size, self.output_size)
+        self.decoder.to(device)
 
         if bool(self.dropout_value):
             self.dropout = nn.Dropout(self.dropout_value)
+            self.dropout.to(device)
         if self.use_softmax:
             self.softmax = nn.Softmax(dim=1)
+            self.softmax.to(device)
 
     def forward(self, input, hidden, cell):
         input = self.encoder(input)
@@ -395,6 +400,7 @@ if __name__ == '__main__':
     # batch_size = 3
     batch_size = 10
     batch_size = 64
+    batch_size = 128
     n_layers = 1
     bidirectional = False
     dropout_value = 0
@@ -402,11 +408,12 @@ if __name__ == '__main__':
     # use_softmax = True
     n_epochs = 1
     n_epochs = 1000
-    n_epochs = 100
+    n_epochs = 10000
+    # n_epochs = 100
     # n_epochs = 256
     criterion = nn.CrossEntropyLoss()
     learning_rate = 0.005
-    learning_rate = 0.05
+    # learning_rate = 0.05
     # learning_rate = 0.1
     print_every = 10
     print_every = None
@@ -430,7 +437,7 @@ if __name__ == '__main__':
     get_vocab(train_set)  # Init vocab
     # print(get_vocab(train_set))
 
-    train_set = train_set[-1000:]
+    # train_set = train_set[-1000:]
     # eval_set = eval_set[:100]
 
     batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
@@ -452,9 +459,9 @@ if __name__ == '__main__':
         use_softmax=use_softmax
     )
 
-    save_model(lstm1, "neptune")
-    model_test = load_model("neptune")
-    model_test1 = load_model("jupiter")
+    # save_model(lstm1, "neptune")
+    # model_test = load_model("neptune")
+    # model_test1 = load_model("jupiter")
     # model_test1.eval()
 
     train_lstm(lstm1, batch_train_dataloader, n_epochs=n_epochs, criterion=criterion, learning_rate=learning_rate, print_every=print_every)
