@@ -259,11 +259,11 @@ def progress(total, acc, start, iter, size):
     else:
         bar = '=' * (filled_len - 1) + '>' + ' ' * (bar_len - filled_len)
 
-    sys.stdout.write('[%s] %s%s => coverage of %.3f %% on %s \r' % (bar, percents, ' %', (100 * acc / size), time_since(start)))
+    sys.stdout.write('[%s] %s%s => coverage of %.3f %% (%d) on %s \r' % (bar, percents, ' %', (100 * acc / size), acc, time_since(start)))
     sys.stdout.flush()
 
 
-def generate_passwords(decoder, start_letter: str, max_length: int = 20):
+def generate_passwords(decoder, start_letter: str, max_length: int = 128):
     with torch.no_grad():  # no need to track history in sampling
 
         hidden = decoder.init_h_c()
@@ -310,7 +310,7 @@ def get_first_letters(n, first_letters=None):
     return get_first_letters(n - 1, first_letters)
 
 
-def test(model, test_data, number_of_first_letters=1):
+def test(model, test_data, number_of_first_letters=1, max_length=128):
 
     start = time()
     accuracy = 0
@@ -319,33 +319,29 @@ def test(model, test_data, number_of_first_letters=1):
     print("Eval data size:", nb_samples)
 
     # i = 0
-    # for starting_letter in get_first_letters(number_of_first_letters):
     for i in range(1, nb_samples + 1):
         starting_letter = ""
         for _ in range(number_of_first_letters):
 
             random_index = randint(1, get_vocab_size() - 1)
             starting_letter += get_vocab()[random_index]
-            # random_index = randint(1, get_vocab_size() - 1)
-            # starting_letter += get_vocab()[random_index]
         i += 1
 
-        predicted_passwords = generate_passwords(model, starting_letter)
+        predicted_passwords = generate_passwords(model, starting_letter, max_length=max_length)
         # print("predicted", predicted_passwords)
         print("predicted", predicted_passwords[0])
 
         # for predicted in predicted_passwords:
         #     if predicted in test_data:
-        #         accuracy = accuracy + model.batch_size
+        #         accuracy = accuracy + 1
         if predicted_passwords[0] in test_data:
             accuracy = accuracy + 1
-            # accuracy = accuracy + model.batch_size
 
         progress(total=nb_samples, acc=accuracy, start=start, iter=i, size=len(test_data))
 
     accuracy = 100 * accuracy / nb_samples
 
-    print('\nAccuracy: ', accuracy, '%')
+    print('\nCoverage: ', accuracy, '%')
 
 
 def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
@@ -393,6 +389,7 @@ if __name__ == '__main__':
     print_every = None
     print_every = 1
     number_of_first_letters = 1
+    max_length = 128
 
     hyper_parameters = {
         "hidden_size": None,
@@ -438,5 +435,5 @@ if __name__ == '__main__':
     print("\n\nEVAL\n")
 
     # test(lstm1, batch_eval_dataloader)
-    test(lstm1, eval_set, number_of_first_letters)
+    test(lstm1, eval_set, number_of_first_letters, max_length)
 
