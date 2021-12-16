@@ -249,17 +249,17 @@ def argmax(float_list):
     return max_idx
 
 
-def progress(total, acc, start, epoch, l):
+def progress(total, acc, start, iter, size):
     bar_len = 50
-    filled_len = int(round(bar_len * epoch / float(total)))
-    percents = round(100.0 * epoch / float(total), 1)
+    filled_len = int(round(bar_len * iter / float(total)))
+    percents = round(100.0 * iter / float(total), 1)
 
     if filled_len == 0:
         bar = '>' * filled_len + ' ' * (bar_len - filled_len)
     else:
         bar = '=' * (filled_len - 1) + '>' + ' ' * (bar_len - filled_len)
 
-    sys.stdout.write('[%s] %s%s epoch: %d ; acc: %.3f %% ; size = %d names => coverage of %.3f %% on %s \r' % (bar, percents, '%', epoch, (100 * acc / epoch), l, (100 * acc / l), time_since(start)))
+    sys.stdout.write('[%s] %s%s => coverage of %.3f %% on %s \r' % (bar, percents, ' %', (100 * acc / size), time_since(start)))
     sys.stdout.flush()
 
 
@@ -338,9 +338,10 @@ def test(model, test_data, number_of_first_letters=1):
         #     if predicted in test_data:
         #         accuracy = accuracy + model.batch_size
         if predicted_passwords[0] in test_data:
-            accuracy = accuracy + model.batch_size
+            accuracy = accuracy + 1
+            # accuracy = accuracy + model.batch_size
 
-        progress(total=nb_samples, acc=accuracy, start=start, epoch=i, l=len(test_data))
+        progress(total=nb_samples, acc=accuracy, start=start, iter=i, size=len(test_data))
 
     accuracy = 100 * accuracy / nb_samples
 
@@ -374,6 +375,7 @@ if __name__ == '__main__':
     # batch_size = 3
     batch_size = 10
     batch_size = 64
+    batch_size = 128
     n_layers = 1
     bidirectional = False
     dropout_value = 0
@@ -385,7 +387,7 @@ if __name__ == '__main__':
     # n_epochs = 256
     criterion = nn.CrossEntropyLoss()
     learning_rate = 0.005
-    learning_rate = 0.05
+    # learning_rate = 0.05
     # learning_rate = 0.1
     print_every = 10
     print_every = None
@@ -409,7 +411,7 @@ if __name__ == '__main__':
     get_vocab(train_set)  # Init vocab
     # print(get_vocab(train_set))
 
-    train_set = train_set[-1000:]
+    # train_set = train_set[-1000:]
     # eval_set = eval_set[:100]
 
     batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
