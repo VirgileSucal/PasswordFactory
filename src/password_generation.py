@@ -147,13 +147,18 @@ def target_tensor(line):
     return tensor
 
 
-def random_batch(passwords, batch_size=1):
-    assert batch_size > 0
-    index = randint(0, len(passwords) - batch_size)
-    passwords_batch = passwords[index: index + batch_size]
-    input_batch = pad_sequence([input_tensor(password) for password in passwords_batch], batch_first=True).long()
-    target_batch = pad_sequence([target_tensor(password) for password in passwords_batch], batch_first=True).long()
-    return input_batch, target_batch
+def random_epoch_mini_batch(passwords_batches, epoch_size=1):
+    assert epoch_size > 0
+    index = randint(0, len(passwords_batches) - epoch_size)
+    selected_passwords_batches = passwords_batches.dataset[index: index + epoch_size]  # torch.utils.data.RandomSampler
+
+    batches = []
+    print(selected_passwords_batches)
+    for passwords_batch in selected_passwords_batches:
+        input_batch = pad_sequence([input_tensor(password) for password in passwords_batch], batch_first=True).long()
+        target_batch = pad_sequence([target_tensor(password) for password in passwords_batch], batch_first=True).long()
+        batches.append((input_batch, target_batch))
+    return batches
 
 
 def init_batches(passwords_batches):
@@ -243,6 +248,36 @@ def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print
 
         # if epoch >= 20:  # TODO: Only for tests (remove it)
         #     break
+
+
+def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, epoch_size):
+
+    assert train_dataloader is not None
+    assert n_epochs > 0
+
+    start = time()
+    all_losses = []
+    total_loss = 0
+    best_loss = (100, 0)
+    print("Data size:", len(train_dataloader), "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", lstm.batch_size)
+
+    for epoch in range(n_epochs):
+        print("epoch:", epoch)
+        batches = random_epoch_mini_batch(train_dataloader, epoch_size)
+        if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
+            print("continue")
+            print(batches[0][0].size())
+            print(batches[0][0])
+            print(lstm.init_h_c().size()[1])
+            continue
+
+        output, loss = train_lstm_epoch(lstm, batches, criterion, learning_rate)
+        total_loss += loss
+        if loss < best_loss[0]:
+            best_loss = (loss, iter)
+        all_losses.append(loss)
+
+        print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, epoch / n_epochs * 100, total_loss / epoch, loss))
 
 
 def argmax(float_list):
@@ -424,6 +459,7 @@ if __name__ == '__main__':
     # hidden_size = input_size
     output_size = get_vocab_size()
     batch_size = 1
+    batch_size = 2
     # batch_size = 3
     # batch_size = 10
     # batch_size = 64
@@ -448,6 +484,7 @@ if __name__ == '__main__':
     print_every = 1
     number_of_first_letters = 1
     max_length = 128
+    epoch_size = 1
 
     hyper_parameters = {
         "hidden_size": None,
@@ -468,7 +505,8 @@ if __name__ == '__main__':
 
     if debug:
         print("Debug mode !")
-        train_set = train_set[-1000:]
+        # train_set = train_set[-1000:]
+        n_epochs = 1000
         # eval_set = eval_set[:100]
 
     batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
@@ -483,6 +521,7 @@ if __name__ == '__main__':
 
     print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
     if have_to_train:
+        print("\n\nTRAIN\n")
         lstm1 = LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
@@ -504,15 +543,22 @@ if __name__ == '__main__':
             "train_size={}".format(len(train_set)),
             "{}".format(time())
         ])
-        # model_name = "lstm_-_hidden_size={}_-_n_layers={}_-_bidirectional={}_-_dropout_value={}_-_use_softmax={}_-_batch_size={}_-_epoch_size={}_-_train_size={}_-_{}".format(hidden_size, n_layers, bidirectional, dropout_value, use_softmax, batch_size, len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader)), len(train_set), time())
         print("Train model \"{}\"".format(model_name))
-        train_lstm(
+        # train_lstm(
+        #     lstm1,
+        #     batch_train_dataloader,
+        #     n_epochs=n_epochs,
+        #     criterion=criterion,
+        #     learning_rate=learning_rate,
+        #     print_every=print_every
+        # )
+        random_train_lstm(
             lstm1,
             batch_train_dataloader,
             n_epochs=n_epochs,
             criterion=criterion,
             learning_rate=learning_rate,
-            print_every=print_every
+            epoch_size=epoch_size
         )
         save_model(lstm1, model_name)
     else:
