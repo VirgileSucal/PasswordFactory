@@ -9,7 +9,7 @@ from time import time
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from torchtext.legacy.data import BucketIterator
 from torch.nn.utils.rnn import pad_sequence
 import tools
@@ -142,8 +142,8 @@ def target_tensor(line):
     tensor = torch.zeros(len(line), get_vocab_size(), dtype=torch.float64)
     for li in range(1, len(line)):  # Don't encode first one because it doesn't need to be predicted
         letter = line[li]
-        tensor[li][get_vocab().find(letter)] = 1.0
-        # The last one remains a 0 tensor (EOS).
+        tensor[li - 1][get_vocab().find(letter)] = 1.0  # The first letter isn't in target tensor because it isn't predicted.
+    tensor[-1][1] = 1.0  # The last one is \0 (EOS).
     return tensor
 
 
@@ -203,7 +203,7 @@ def train_lstm_epoch(model, batches, criterion, learning_rate):
     return output, loss.item() / len(batches)
 
 
-def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None):
+def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
 
     assert train_dataloader is not None
     assert n_epochs > 0
@@ -241,7 +241,7 @@ def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print
                 best_loss = (loss, iter)
             all_losses.append(loss)
 
-            if iter % print_every == 0:
+            if verbose and iter % print_every == 0:
                 print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, iter / n_iters * 100, total_loss / iter, loss))
 
             current_epoch_batches = []
@@ -250,7 +250,7 @@ def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print
         #     break
 
 
-def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, epoch_size):
+def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
 
     assert train_dataloader is not None
     assert n_epochs > 0
@@ -259,25 +259,43 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
     all_losses = []
     total_loss = 0
     best_loss = (100, 0)
-    print("Data size:", len(train_dataloader), "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", lstm.batch_size)
+    n_iters = len(train_dataloader)
+    epoch_size = n_iters // min(n_epochs, n_iters)
+    print("Data size:", n_iters, "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", lstm.batch_size)
+    if print_every is None:
+        print_every = epoch_size
 
-    for epoch in range(n_epochs):
-        print("epoch:", epoch)
-        batches = random_epoch_mini_batch(train_dataloader, epoch_size)
-        if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
-            print("continue")
-            print(batches[0][0].size())
-            print(batches[0][0])
-            print(lstm.init_h_c().size()[1])
-            continue
+    current_epoch_batches = []
 
-        output, loss = train_lstm_epoch(lstm, batches, criterion, learning_rate)
-        total_loss += loss
-        if loss < best_loss[0]:
-            best_loss = (loss, iter)
-        all_losses.append(loss)
+    epoch = 0
+    it = 0
+    data_iterator = iter(train_dataloader)
+    for batch in data_iterator:
 
-        print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, epoch / n_epochs * 100, total_loss / epoch, loss))
+        current_epoch_batches.append(batch)
+        it += 1
+
+        if it % epoch_size == 0:  # All batches for this epoch have been loaded.
+            epoch += 1
+
+            batches = init_batches(current_epoch_batches)
+            # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
+            if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
+                continue
+
+            output, loss = train_lstm_epoch(lstm, batches, criterion, learning_rate)
+            total_loss += loss
+            if loss < best_loss[0]:
+                best_loss = (loss, it)
+            all_losses.append(loss)
+
+            if verbose and it % print_every == 0:
+                print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, it / n_iters * 100, total_loss / it, loss))
+
+            current_epoch_batches = []
+
+        # if epoch >= 20:  # TODO: Only for tests (remove it)
+        #     break
 
 
 def argmax(float_list):
@@ -305,39 +323,68 @@ def progress(total, acc, start, iter, size):
     sys.stdout.flush()
 
 
-def generate_passwords(decoder, start_letter: str, max_length: int = 128):
+def generate_passwords(decoder, start_letters, max_length: int = 128):
     with torch.no_grad():  # no need to track history in sampling
 
         hidden = decoder.init_h_c()
         cell = decoder.init_h_c()
 
-        output_passwords = [start_letter[0] for _ in range(decoder.batch_size)]
+        # print(start_letters)
+
+        output_passwords = None
+        if type(start_letters) == str:
+            output_passwords = [start_letters[0] for _ in range(decoder.batch_size)]
+        else:
+            output_passwords = [sl for sl in start_letters]
         # input = input_tensor(start_letters)
         input = pad_sequence([torch.LongTensor([input_tensor(letter)]) for letter in output_passwords], batch_first=True).long()  # It will generate len(batch) passwords each time.
+        input = init_batches([output_passwords])[0][0]
+        # # input = init_batches([output_passwords])
+        # # print(input)
+        # # input = input[0][0]
         # print(input)
-        # print(input.size())
-        # input = torch.unsqueeze(input, dim=-1)
-        # print(input)
-        # print(input.size())
+        # # print(input.size())
+        # # input = torch.unsqueeze(input, dim=-1)
+        # # print(input)
+        # # print(input.size())
 
         for i in range(max_length):
             output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
             # print(output)
-            predicted_letters_indices = [argmax(letter_one_hot[0]) for letter_one_hot in output]
+            # predicted_letters_indices = [argmax(letter_one_hot[0]) for letter_one_hot in output]
+            # predicted_letters_indices = [[argmax(letter_one_hot[i]) for letter_one_hot in output] for i in range(len(output_passwords))]
+            predicted_letters_indices = [argmax(letter_one_hot[-1]) for letter_one_hot in output]
+            # exit(1)
             # print(predicted_letters_indices)
             # if sum(predicted_letters_indices) == 0:  # If letter is EOS
             #     break
-            if predicted_letters_indices[0] <= 1:  # If letter is EOS
-                break
+            # if predicted_letters_indices[0] <= 1:  # If letter is EOS
+            #     break
+            if sum([pred > 1 for pred in predicted_letters_indices]) == 0:  # If letter is EOS
+                print([pred for pred in predicted_letters_indices])
+                break  # TODO: they don't always end on same letter.
 
             next_letters = [get_vocab()[predicted] for predicted in predicted_letters_indices]
             for i in range(len(output_passwords)):
                 output_passwords[i] += next_letters[i]
-            # input = input_tensor(next_letters)
-            input = pad_sequence([torch.LongTensor([input_tensor(letter)]) for letter in next_letters], batch_first=True).long()  # It will generate len(batch) passwords each time.
+            # # input = input_tensor(next_letters)
+            # # input = pad_sequence([torch.LongTensor([input_tensor(letter)]) for letter in next_letters], batch_first=True).long()  # It will generate len(batch) passwords each time.
+            input = init_batches([output_passwords])[0][0]
+            # # input = init_batches([output_passwords])
+            # # print(input)
+            # # input = input[0][0]
+            # print(input)
 
-        return output_passwords
+        # return output_passwords
+        return [op[:op.find('\0')] for op in output_passwords]
+        # return [str(op + '\0')[:op.find('\0')] for op in output_passwords]
 
+        # outputs = []
+        # for op in output_passwords:
+        #     if '\0' in op:
+        #         op = op[:op.find('\0')]
+        #     outputs.append(op)
+        # return outputs
 
 def get_first_letters(n, first_letters=None):
     assert n > 0
@@ -352,37 +399,49 @@ def get_first_letters(n, first_letters=None):
     return get_first_letters(n - 1, first_letters)
 
 
-def test(model, test_data, number_of_first_letters=1, max_length=128):
+def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=True):
 
     start = time()
     accuracy = 0
     nb_samples = len(test_data)
+    batch_size = model.batch_size
+    print(batch_size)
+    current_batch = []
+    remainer = int(nb_samples)
 
     print("Eval data size:", nb_samples)
 
     # i = 0
     for i in range(1, nb_samples + 1):
+
         starting_letter = ""
         for _ in range(number_of_first_letters):
-
             random_index = randint(1, get_vocab_size() - 1)
             starting_letter += get_vocab()[random_index]
-        i += 1
 
-        predicted_passwords = generate_passwords(model, starting_letter, max_length=max_length)
-        # print("predicted", predicted_passwords)
-        print("predicted", predicted_passwords[0])
+        current_batch.append(starting_letter)
 
-        # for predicted in predicted_passwords:
-        #     if predicted in test_data:
-        #         accuracy = accuracy + 1
-        if predicted_passwords[0] in test_data:
-            accuracy = accuracy + 1
+        if i % batch_size == 0:  # All batches for this epoch have been loaded.
+            remainer -= batch_size
 
-        progress(total=nb_samples, acc=accuracy, start=start, iter=i, size=len(test_data))
+            predicted_passwords = generate_passwords(model, current_batch, max_length=max_length)
+            # print("predicted", predicted_passwords)
+            if verbose:
+                # print("predicted", predicted_passwords[0])
+                print("predicted", predicted_passwords)
 
-    accuracy = 100 * accuracy / nb_samples
+            for predicted in predicted_passwords:
+                if predicted in test_data:
+                    accuracy = accuracy + 1
+            # if predicted_passwords[0] in test_data:
+            #     accuracy = accuracy + 1
 
+            current_batch = []
+
+            if verbose:
+                progress(total=nb_samples, acc=accuracy, start=start, iter=i, size=len(test_data))
+
+    accuracy = 100 * accuracy / (nb_samples - remainer)
     print('\nCoverage: ', accuracy, '%')
 
 
@@ -431,6 +490,7 @@ def get_args():
     parser.add_argument("-t", "--train", default=True, type=str, help="Train the model (if False, load the model) [default True]")
     parser.add_argument("-e", "--eval", default=True, type=str, help="Evaluate the model [default True]")
     parser.add_argument("-d", "--debug", default=False, type=str, help="Activate debug code [default False]")
+    parser.add_argument("-v", "--verbose", default=True, type=str, help="Print log [default True]")
     return parser.parse_args()
 
 
@@ -443,12 +503,14 @@ if __name__ == '__main__':
     # have_to_eval = args.eval
     model_name = args.model
     debug = tools.parse_bools(args.debug)
+    verbose = tools.parse_bools(args.verbose)
     # debug = args.debug
     # tools.init_dir(model_name)
     print(model_name)
 
     # have_to_train = True
     # have_to_eval = False
+    # verbose = False
 
     train_set, eval_set = extract_data()
     print(get_vocab(train_set))
@@ -470,9 +532,9 @@ if __name__ == '__main__':
     use_softmax = False
     # use_softmax = True
     n_epochs = 1
-    n_epochs = 1000
-    n_epochs = 10000
-    n_epochs = 1000000
+    n_epochs = 1_000
+    n_epochs = 10_000
+    n_epochs = 1_000_000
     # n_epochs = 100
     # n_epochs = 256
     criterion = nn.CrossEntropyLoss()
@@ -482,6 +544,7 @@ if __name__ == '__main__':
     print_every = 10
     print_every = None
     print_every = 1
+    print_every = 100
     number_of_first_letters = 1
     max_length = 128
     epoch_size = 1
@@ -506,10 +569,12 @@ if __name__ == '__main__':
     if debug:
         print("Debug mode !")
         # train_set = train_set[-1000:]
-        n_epochs = 1000
+        n_epochs = 1_000
         # eval_set = eval_set[:100]
 
-    batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    random_sampler = RandomSampler(train_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
+    # batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=False, sampler=random_sampler)
     # batch_eval_dataloader = DataLoader(eval_set, batch_size=batch_size, shuffle=True)
     batch_eval_dataloader = DataLoader(eval_set, batch_size=1, shuffle=True)
 
@@ -550,7 +615,8 @@ if __name__ == '__main__':
         #     n_epochs=n_epochs,
         #     criterion=criterion,
         #     learning_rate=learning_rate,
-        #     print_every=print_every
+        #     print_every=print_every,
+        #     verbose=verbose
         # )
         random_train_lstm(
             lstm1,
@@ -558,7 +624,9 @@ if __name__ == '__main__':
             n_epochs=n_epochs,
             criterion=criterion,
             learning_rate=learning_rate,
-            epoch_size=epoch_size
+            print_every=print_every,
+            # epoch_size=epoch_size,
+            verbose=verbose
         )
         save_model(lstm1, model_name)
     else:
@@ -568,5 +636,5 @@ if __name__ == '__main__':
     if have_to_eval:
         print("\n\nEVAL\n")
         # test(lstm1, batch_eval_dataloader)
-        test(lstm1, eval_set, number_of_first_letters, max_length)
+        test(lstm1, eval_set, number_of_first_letters, max_length, verbose=verbose)
 
