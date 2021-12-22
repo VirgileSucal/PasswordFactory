@@ -47,7 +47,7 @@ def get_vocab(data=None):
     global __vocab_size
     assert not (__vocab is None and data is None)
     if __vocab is None:
-        __vocab = "\0\0" + "".join(list(get_char_ratio(data)[1].keys()))  # EOS is index 1, because index is used for initializing one-hots.
+        __vocab = "".join(["\0" for _ in range(consts.vocab_start_idx)]) + "".join(list(get_char_ratio(data)[1].keys()))  # EOS is index 1, because index is used for initializing one-hots.
         __vocab_size = len(__vocab)
     return __vocab
 
@@ -143,7 +143,7 @@ def target_tensor(line):
     for li in range(1, len(line)):  # Don't encode first one because it doesn't need to be predicted
         letter = line[li]
         tensor[li - 1][get_vocab().find(letter)] = 1.0  # The first letter isn't in target tensor because it isn't predicted.
-    tensor[-1][1] = 1.0  # The last one is \0 (EOS).
+    tensor[-1][consts.vocab_start_idx] = 1.0  # The last one is \0 (EOS).
     return tensor
 
 
@@ -171,7 +171,7 @@ def init_batches(passwords_batches):
     return batches
 
 
-def train_lstm_epoch(model, batches, criterion, learning_rate):
+def train_lstm_mini_batch(model, batches, criterion, learning_rate):
     hidden = model.init_h_c()
     cell = model.init_h_c()
     output = None
@@ -203,51 +203,110 @@ def train_lstm_epoch(model, batches, criterion, learning_rate):
     return output, loss.item() / len(batches)
 
 
-def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
+# def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
+#
+#     assert train_dataloader is not None
+#     assert n_epochs > 0
+#
+#     start = time()
+#     all_losses = []
+#     total_loss = 0
+#     best_loss = (100, 0)
+#     n_iters = len(train_dataloader)
+#     epoch_size = n_iters // min(n_epochs, n_iters)
+#     print("Data size:", n_iters, "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", lstm.batch_size)
+#     if print_every is None:
+#         print_every = epoch_size
+#
+#     current_epoch_batches = []
+#
+#     epoch = 0
+#     iter = 0
+#     for batch in train_dataloader:
+#
+#         current_epoch_batches.append(batch)
+#         iter += 1
+#
+#         if iter % epoch_size == 0:  # All batches for this epoch have been loaded.
+#             epoch += 1
+#
+#             batches = init_batches(current_epoch_batches)
+#             # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
+#             if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
+#                 continue
+#
+#             output, loss = train_lstm_mini_batch(lstm, batches, criterion, learning_rate)
+#             total_loss += loss
+#             if loss < best_loss[0]:
+#                 best_loss = (loss, iter)
+#             all_losses.append(loss)
+#
+#             if verbose and iter % print_every == 0:
+#                 print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, iter / n_iters * 100, total_loss / iter, loss))
+#
+#             current_epoch_batches = []
+#
+#         # if epoch >= 20:  # TODO: Only for tests (remove it)
+#         #     break
+
+
+def train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, verbose=True):
 
     assert train_dataloader is not None
-    assert n_epochs > 0
+
+    n_iters = len(train_dataloader)
+    if n_mini_batches is None:
+        n_mini_batches = n_iters
+    assert n_mini_batches > 0
 
     start = time()
     all_losses = []
     total_loss = 0
     best_loss = (100, 0)
-    n_iters = len(train_dataloader)
-    epoch_size = n_iters // min(n_epochs, n_iters)
-    print("Data size:", n_iters, "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", lstm.batch_size)
+    mini_batches_size = n_iters // min(n_mini_batches, n_iters)
+    print("Data size:", n_iters, "; Epoch size:", mini_batches_size, "; Epochs:", n_mini_batches, "Batch size:", lstm.batch_size)
     if print_every is None:
-        print_every = epoch_size
+        print_every = mini_batches_size
 
     current_epoch_batches = []
 
-    epoch = 0
+    mini_batch = 0
     iter = 0
     for batch in train_dataloader:
-
         current_epoch_batches.append(batch)
         iter += 1
 
-        if iter % epoch_size == 0:  # All batches for this epoch have been loaded.
-            epoch += 1
+        if iter % mini_batches_size == 0:  # All batches for this mini_batch have been loaded.
+            mini_batch += 1
 
             batches = init_batches(current_epoch_batches)
             # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
             if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
                 continue
 
-            output, loss = train_lstm_epoch(lstm, batches, criterion, learning_rate)
+            output, loss = train_lstm_mini_batch(lstm, batches, criterion, learning_rate)
             total_loss += loss
             if loss < best_loss[0]:
                 best_loss = (loss, iter)
             all_losses.append(loss)
 
             if verbose and iter % print_every == 0:
-                print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, iter / n_iters * 100, total_loss / iter, loss))
+                print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, iter / n_iters * 100, total_loss / iter, loss))
+                # print_progress(total=n_mini_batches, acc=best_loss, start=start, iter=mini_batch, size=len(n_mini_batches))
+
 
             current_epoch_batches = []
 
-        # if epoch >= 20:  # TODO: Only for tests (remove it)
+        # if mini_batch >= 20:  # TODO: Only for tests (remove it)
         #     break
+
+
+def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
+
+    for epoch in range(n_epochs):
+        if verbose:
+            print("\nEpoch:", epoch + 1, "/", n_epochs)
+        train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=print_every, verbose=verbose)
 
 
 def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
@@ -269,6 +328,7 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
 
     epoch = 0
     it = 0
+    percent = 0
     data_iterator = iter(train_dataloader)
     for batch in data_iterator:
 
@@ -283,14 +343,20 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
             if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
                 continue
 
-            output, loss = train_lstm_epoch(lstm, batches, criterion, learning_rate)
+            output, loss = train_lstm_mini_batch(lstm, batches, criterion, learning_rate)
             total_loss += loss
             if loss < best_loss[0]:
                 best_loss = (loss, it)
             all_losses.append(loss)
 
             if verbose and it % print_every == 0:
+                tmp = int(it / n_iters * 100)
+                if tmp > percent:
+                    percent = tmp
+                    with open("tmp_print.txt", "a") as file:  # TODO: Only for tests, remove it.
+                        file.write(str(percent) + " %\n")
                 print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, it / n_iters * 100, total_loss / it, loss))
+
 
             current_epoch_batches = []
 
@@ -309,7 +375,7 @@ def argmax(float_list):
     return max_idx
 
 
-def progress(total, acc, start, iter, size):
+def print_progress(total, acc, start, iter, size):
     bar_len = 50
     filled_len = int(round(bar_len * iter / float(total)))
     percents = round(100.0 * iter / float(total), 1)
@@ -323,7 +389,7 @@ def progress(total, acc, start, iter, size):
     sys.stdout.flush()
 
 
-def generate_passwords(decoder, start_letters, max_length: int = 128):
+def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
     with torch.no_grad():  # no need to track history in sampling
 
         hidden = decoder.init_h_c()
@@ -336,8 +402,8 @@ def generate_passwords(decoder, start_letters, max_length: int = 128):
             output_passwords = [start_letters[0] for _ in range(decoder.batch_size)]
         else:
             output_passwords = [sl for sl in start_letters]
-        # input = input_tensor(start_letters)
-        input = pad_sequence([torch.LongTensor([input_tensor(letter)]) for letter in output_passwords], batch_first=True).long()  # It will generate len(batch) passwords each time.
+        # # input = input_tensor(start_letters)
+        # input = pad_sequence([torch.LongTensor([input_tensor(letter)]) for letter in output_passwords], batch_first=True).long()  # It will generate len(batch) passwords each time.
         input = init_batches([output_passwords])[0][0]
         # # input = init_batches([output_passwords])
         # # print(input)
@@ -348,7 +414,7 @@ def generate_passwords(decoder, start_letters, max_length: int = 128):
         # # print(input)
         # # print(input.size())
 
-        for i in range(max_length):
+        for i in range(max_length):  # There is a max length to avoid too long computing time.
             output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
             # print(output)
             # predicted_letters_indices = [argmax(letter_one_hot[0]) for letter_one_hot in output]
@@ -358,9 +424,9 @@ def generate_passwords(decoder, start_letters, max_length: int = 128):
             # print(predicted_letters_indices)
             # if sum(predicted_letters_indices) == 0:  # If letter is EOS
             #     break
-            # if predicted_letters_indices[0] <= 1:  # If letter is EOS
+            # if predicted_letters_indices[0] < consts.vocab_start_idx:  # If letter is EOS
             #     break
-            if sum([pred > 1 for pred in predicted_letters_indices]) == 0:  # If letter is EOS
+            if sum([pred >= consts.vocab_start_idx for pred in predicted_letters_indices]) == 0:  # To make tests faster.
                 print([pred for pred in predicted_letters_indices])
                 break  # TODO: they don't always end on same letter.
 
@@ -385,6 +451,7 @@ def generate_passwords(decoder, start_letters, max_length: int = 128):
         #         op = op[:op.find('\0')]
         #     outputs.append(op)
         # return outputs
+
 
 def get_first_letters(n, first_letters=None):
     assert n > 0
@@ -416,7 +483,7 @@ def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=Tr
 
         starting_letter = ""
         for _ in range(number_of_first_letters):
-            random_index = randint(1, get_vocab_size() - 1)
+            random_index = randint(consts.vocab_start_idx, get_vocab_size() - consts.vocab_start_idx)
             starting_letter += get_vocab()[random_index]
 
         current_batch.append(starting_letter)
@@ -424,7 +491,7 @@ def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=Tr
         if i % batch_size == 0:  # All batches for this epoch have been loaded.
             remainer -= batch_size
 
-            predicted_passwords = generate_passwords(model, current_batch, max_length=max_length)
+            predicted_passwords = generate_passwords_batches(model, current_batch, max_length=max_length)
             # print("predicted", predicted_passwords)
             if verbose:
                 # print("predicted", predicted_passwords[0])
@@ -439,7 +506,7 @@ def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=Tr
             current_batch = []
 
             if verbose:
-                progress(total=nb_samples, acc=accuracy, start=start, iter=i, size=len(test_data))
+                print_progress(total=nb_samples, acc=accuracy, start=start, iter=i, size=len(test_data))
 
     accuracy = 100 * accuracy / (nb_samples - remainer)
     print('\nCoverage: ', accuracy, '%')
@@ -524,7 +591,7 @@ if __name__ == '__main__':
     batch_size = 2
     # batch_size = 3
     # batch_size = 10
-    # batch_size = 64
+    batch_size = 64
     # batch_size = 128
     n_layers = 1
     bidirectional = False
@@ -536,6 +603,7 @@ if __name__ == '__main__':
     n_epochs = 10_000
     n_epochs = 1_000_000
     # n_epochs = 100
+    # n_epochs = 20
     # n_epochs = 256
     criterion = nn.CrossEntropyLoss()
     learning_rate = 0.005
@@ -545,6 +613,7 @@ if __name__ == '__main__':
     print_every = None
     print_every = 1
     print_every = 100
+    print_every = 1000
     number_of_first_letters = 1
     max_length = 128
     epoch_size = 1
@@ -569,7 +638,7 @@ if __name__ == '__main__':
     if debug:
         print("Debug mode !")
         # train_set = train_set[-1000:]
-        n_epochs = 1_000
+        # n_epochs = 1_000
         # eval_set = eval_set[:100]
 
     random_sampler = RandomSampler(train_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
