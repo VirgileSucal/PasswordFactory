@@ -14,7 +14,6 @@ from torchtext.legacy.data import BucketIterator
 from torch.nn.utils.rnn import pad_sequence
 import tools
 from data_mining import get_char_ratio
-from tools import extract_data, parse_bools
 import consts
 from argparse import ArgumentParser
 from sklearn.model_selection import RandomizedSearchCV
@@ -272,6 +271,7 @@ def train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_ba
 
     mini_batch = 0
     iter = 0
+    percent = -1
     for batch in train_dataloader:
         current_epoch_batches.append(batch)
         iter += 1
@@ -291,6 +291,12 @@ def train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_ba
             all_losses.append(loss)
 
             if verbose and iter % print_every == 0:
+                tmp = int(iter / n_iters * 100)
+                if tmp > percent:
+                    percent = tmp
+                    with open("tmp_print.txt", "a") as file:  # TODO: Only for tests, remove it.
+                        # file.write(str(time_since(start)) + " ; " + str(percent) + " %\n")
+                        file.write('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, iter / n_iters * 100, total_loss / iter, loss) + "\n")
                 print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, iter / n_iters * 100, total_loss / iter, loss))
                 # print_progress(total=n_mini_batches, acc=best_loss, start=start, iter=mini_batch, size=len(n_mini_batches))
 
@@ -328,7 +334,7 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
 
     epoch = 0
     it = 0
-    percent = 0
+    percent = -1
     data_iterator = iter(train_dataloader)
     for batch in data_iterator:
 
@@ -354,7 +360,8 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
                 if tmp > percent:
                     percent = tmp
                     with open("tmp_print.txt", "a") as file:  # TODO: Only for tests, remove it.
-                        file.write(str(percent) + " %\n")
+                        # file.write(str(time_since(start)) + " ; " + str(percent) + " %\n")
+                        file.write('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, it / n_iters * 100, total_loss / it, loss) + "\n")
                 print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, it / n_iters * 100, total_loss / it, loss))
 
 
@@ -362,6 +369,25 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
 
         # if epoch >= 20:  # TODO: Only for tests (remove it)
         #     break
+
+
+def pretrain_lstm(lstm, n_epochs, epoch_size, criterion, learning_rate, random=True, print_every=None, verbose=True):
+    """
+    Pretrain model on a dataset containing obscene words
+
+    Link to dataset: github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/blob/master/en
+    """
+
+    pretrain_dataloader = None
+    batch_size = lstm.batch_size
+    pretrain_set = tools.extract_pretrain_data()
+    if random:
+        random_sampler = RandomSampler(pretrain_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
+        pretrain_dataloader = DataLoader(pretrain_set, batch_size=batch_size, shuffle=False, sampler=random_sampler)
+        random_train_lstm(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
+    else:
+        pretrain_dataloader = DataLoader(pretrain_set, batch_size=batch_size, shuffle=True)
+        train_lstm(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
 
 
 def argmax(float_list):
@@ -512,6 +538,35 @@ def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=Tr
     print('\nCoverage: ', accuracy, '%')
 
 
+def test_brute_force(test_data, batch_size=1, max_length=128, print_every=None, verbose=True):
+    start = time()
+    accuracy = 0
+    nb_samples = len(test_data)
+    size = nb_samples * batch_size
+    if print_every is None:
+        print_every = epoch_size
+
+    if verbose:
+        print("Compute brute force coverage (create {} batches of size {})".format(nb_samples, batch_size))
+
+    # i = 0
+    for i in range(1, size + 1):
+
+        predicted = ""
+        for _ in range(max_length):
+            random_index = randint(consts.vocab_start_idx, get_vocab_size() - consts.vocab_start_idx)
+            if random_index < consts.vocab_start_idx:
+                break
+            predicted += get_vocab()[random_index]
+        if predicted in test_data:
+            accuracy = accuracy + 1
+        if verbose:
+            print_progress(total=size, acc=accuracy, start=start, iter=i, size=size)
+
+    accuracy = 100 * accuracy / nb_samples
+    print('\nCoverage: ', accuracy, '%')
+
+
 def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
     # It looks like this method only works with sklearn classifier (we are working with Pytorch)
 
@@ -549,15 +604,33 @@ def load_model(model_name):
 
 
 def get_args():
-
     parser = ArgumentParser()
-    parser.add_argument("-r", "--run", default=consts.default_model_file, type=str, help="name of the model saved file")
-    parser.add_argument("-m", "--model", default=str(path.join(consts.models_dir, consts.default_model_file)), type=str, help="Path of the model to save for training or to load for evaluating/testing (eval/test) [path/to/the/model]")
-    # parser.add_argument('-n', '--n', default=consts.default_n_samples, type=int, help="number of samples to generate [< 1000].")
-    parser.add_argument("-t", "--train", default=True, type=str, help="Train the model (if False, load the model) [default True]")
+    parser.add_argument("-r", "--run", default=consts.default_model_file, type=str, help="Name of the model saved file")
+    parser.add_argument(
+        "-m", "--model", default=str(path.join(consts.models_dir, consts.default_model_file)), type=str,
+        help="Path of the model to save for training or to load for evaluating/testing (eval/test) [path/to/the/model]"
+    )
+    # parser.add_argument(
+    #     '-n', '--n', default=consts.default_n_samples, type=int,
+    #     help="number of samples to generate [< 1000]."
+    # )
+    parser.add_argument(
+        "-t", "--train", default=True, type=str,
+        help="Train the model (if False, load the model) [default True]"
+    )
+    parser.add_argument(
+        "-p", "--pretrain", default=False, type=str,
+        help="Pretrain the model (if --train is False, --pretrain is False) [default False]"
+    )
     parser.add_argument("-e", "--eval", default=True, type=str, help="Evaluate the model [default True]")
+    parser.add_argument(
+        "-b", "--bruteforce", default=False, type=str,
+        help="Evaluate brute force method coverage [default False]"
+    )
+    parser.add_argument("-a", "--random", default=False, type=str, help="Use random train [default False]")
     parser.add_argument("-d", "--debug", default=False, type=str, help="Activate debug code [default False]")
     parser.add_argument("-v", "--verbose", default=True, type=str, help="Print log [default True]")
+    parser.add_argument("-s", "--test_set", default=None, type=str, help="Path to dataset for tests")
     return parser.parse_args()
 
 
@@ -565,33 +638,37 @@ if __name__ == '__main__':
     
     args = get_args()
     have_to_train = tools.parse_bools(args.train)
-    # have_to_train = args.train
     have_to_eval = tools.parse_bools(args.eval)
-    # have_to_eval = args.eval
-    model_name = args.model
+    test_set = None if args.test_set is None else tools.read_file(args.test_set)
+    have_to_test = False if test_set is None else True
     debug = tools.parse_bools(args.debug)
+    have_to_pretrain = tools.parse_bools(args.pretrain) if have_to_train else False
+    bruteforce = tools.parse_bools(args.bruteforce)
     verbose = tools.parse_bools(args.verbose)
-    # debug = args.debug
+    random = args.random
+    model_name = args.model
     # tools.init_dir(model_name)
     print(model_name)
 
     # have_to_train = True
+    # have_to_train = False
     # have_to_eval = False
     # verbose = False
+    bruteforce = True
+    # debug = True
 
-    train_set, eval_set = extract_data()
-    print(get_vocab(train_set))
+    # train_set, eval_set = extract_data()
+    train_set, eval_set = tools.extract_train_data(), tools.extract_eval_data()
     get_vocab(train_set)  # Init vocab
+    print(get_vocab(train_set))
 
     input_size = get_vocab_size()
     hidden_size = 256
-    # hidden_size = input_size
     output_size = get_vocab_size()
     batch_size = 1
-    batch_size = 2
-    # batch_size = 3
+    # batch_size = 2
     # batch_size = 10
-    batch_size = 64
+    # batch_size = 64
     # batch_size = 128
     n_layers = 1
     bidirectional = False
@@ -631,10 +708,6 @@ if __name__ == '__main__':
     }
     # print(hyper_parameters)
 
-    train_set, eval_set = extract_data()
-    get_vocab(train_set)  # Init vocab
-    # print(get_vocab(train_set))
-
     if debug:
         print("Debug mode !")
         # train_set = train_set[-1000:]
@@ -651,22 +724,35 @@ if __name__ == '__main__':
     # for batch in batch_train_dataloader:
     #     print(batch)
 
-    lstm1 = None
+    lstm1 = LSTM(
+        input_size=input_size,
+        hidden_size=hidden_size,
+        output_size=output_size,
+        batch_size=batch_size,
+        n_layers=n_layers,
+        bidirectional=bidirectional,
+        dropout_value=dropout_value,
+        use_softmax=use_softmax
+    )
 
-    print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
+    print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_pretrain:", have_to_pretrain, "({})".format(type(have_to_pretrain)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
+
+    if have_to_pretrain:
+        pretrain_lstm(
+            lstm1,
+            n_epochs,
+            epoch_size,
+            criterion,
+            learning_rate,
+            random=random,
+            print_every=print_every,
+            verbose=verbose
+        )
+
     if have_to_train:
         print("\n\nTRAIN\n")
-        lstm1 = LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            output_size=output_size,
-            batch_size=batch_size,
-            n_layers=n_layers,
-            bidirectional=bidirectional,
-            dropout_value=dropout_value,
-            use_softmax=use_softmax
-        )
         model_name = "_-_".join([
+            "lstm",
             "hidden_size={}".format(hidden_size),
             "n_layers={}".format(n_layers),
             "bidirectional={}".format(bidirectional),
@@ -674,7 +760,7 @@ if __name__ == '__main__':
             "use_softmax={}".format(use_softmax),
             "batch_size={}".format(batch_size),
             "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
-            "train_size={}".format(len(train_set)),
+            "train_size={}".format(len(batch_train_dataloader)),
             "{}".format(time())
         ])
         print("Train model \"{}\"".format(model_name))
@@ -706,4 +792,15 @@ if __name__ == '__main__':
         print("\n\nEVAL\n")
         # test(lstm1, batch_eval_dataloader)
         test(lstm1, eval_set, number_of_first_letters, max_length, verbose=verbose)
+        # if bruteforce:
+        #     test_brute_force(eval_set, batch_size=lstm1.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
+
+    if have_to_test:
+        print("\n\nTEST\n")
+        # test_dataloader = DataLoader(test_set, batch_size=lstm1.batch_size, shuffle=True)
+        test(lstm1, test_set, number_of_first_letters, max_length, verbose=verbose)
+        eval_set = test_set
+
+    if bruteforce:
+        test_brute_force(eval_set, batch_size=lstm1.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
 
