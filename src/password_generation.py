@@ -133,6 +133,77 @@ class LSTM(nn.Module):
         ))
 
 
+class GRU(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, batch_size=1, n_layers=1, bidirectional=False, dropout_value=0, use_softmax=False):
+        super(GRU, self).__init__()
+
+        assert input_size > 0
+        assert hidden_size > 0
+        assert output_size > 0
+        assert n_layers > 0
+        assert batch_size > 0
+        assert 0 <= dropout_value < 1
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.batch_size = batch_size
+        self.bidirectional = bidirectional
+        self.dropout_value = dropout_value
+        self.use_softmax = use_softmax
+        self.use_softmax = False
+
+        self.encoder = nn.Embedding(self.input_size, self.hidden_size)  # input_size = vocab size, but entry is index, not one_hot
+        self.encoder.to(device)
+        self.gru = nn.GRU(
+            input_size=self.hidden_size,
+            hidden_size=self.hidden_size,
+            num_layers=self.n_layers,
+            bidirectional=self.bidirectional,
+            dropout=self.dropout_value,
+            batch_first=True
+        )
+        self.gru.to(device)
+        self.decoder = nn.Linear(self.hidden_size, self.output_size)
+        self.decoder.to(device)
+
+        if bool(self.dropout_value):
+            self.dropout = nn.Dropout(self.dropout_value)
+            self.dropout.to(device)
+        if self.use_softmax:
+            self.softmax = nn.Softmax(dim=1)
+            self.softmax.to(device)
+
+    def forward(self, input, hidden):
+        input = self.encoder(input)
+        output, hidden = self.gru(input, hidden)
+        output = self.decoder(output)
+
+        if bool(self.dropout_value):
+            output = self.dropout(output)
+        if self.use_softmax:
+            output = self.softmax(output)
+
+        return output, (hidden, )
+
+    def init_h_c_with_zeros(self):
+        return Variable(torch.zeros(
+            (1 + int(self.bidirectional)) * self.n_layers,
+            self.batch_size,
+            self.hidden_size,
+            device=device
+        ))
+
+    def init_h_c(self):
+        return Variable(torch.rand(
+            (1 + int(self.bidirectional)) * self.n_layers,
+            self.batch_size,
+            self.hidden_size,
+            device=device
+        ))
+
+
 def input_tensor(line):
     return torch.LongTensor([get_vocab().find(line[li]) for li in range(0, len(line))])
 
@@ -170,9 +241,13 @@ def init_batches(passwords_batches):
     return batches
 
 
-def train_lstm_mini_batch(model, batches, criterion, learning_rate):
+def train_model_mini_batch(model, batches, criterion, learning_rate):
     hidden = model.init_h_c()
     cell = model.init_h_c()
+    if type(model) == LSTM:
+        hc = hidden, cell
+    else:
+        hc = (hidden, )
     output = None
 
     model.zero_grad()
@@ -184,7 +259,7 @@ def train_lstm_mini_batch(model, batches, criterion, learning_rate):
             continue
         # print(input_batch)
         # print(input_batch.size())
-        output, (hidden, cell) = model(input_batch.to(device), hidden.to(device), cell.to(device))
+        output, hc = model(input_batch.to(device), *(item.to(device) for item in hc))
         # print()
         # print()
         # print(output)
@@ -249,7 +324,7 @@ def train_lstm_mini_batch(model, batches, criterion, learning_rate):
 #         #     break
 
 
-def train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, verbose=True):
+def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, verbose=True):
 
     assert train_dataloader is not None
 
@@ -284,7 +359,7 @@ def train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_ba
             if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
                 continue
 
-            output, loss = train_lstm_mini_batch(lstm, batches, criterion, learning_rate)
+            output, loss = train_model_mini_batch(lstm, batches, criterion, learning_rate)
             total_loss += loss
             if loss < best_loss[0]:
                 best_loss = (loss, iter)
@@ -307,15 +382,15 @@ def train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_ba
         #     break
 
 
-def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
+def train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
 
     for epoch in range(n_epochs):
         if verbose:
             print("\nEpoch:", epoch + 1, "/", n_epochs)
-        train_lstm_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=print_every, verbose=verbose)
+        train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=print_every, verbose=verbose)
 
 
-def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
+def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
 
     assert train_dataloader is not None
     assert n_epochs > 0
@@ -349,7 +424,7 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
             if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
                 continue
 
-            output, loss = train_lstm_mini_batch(lstm, batches, criterion, learning_rate)
+            output, loss = train_model_mini_batch(lstm, batches, criterion, learning_rate)
             total_loss += loss
             if loss < best_loss[0]:
                 best_loss = (loss, it)
@@ -371,7 +446,7 @@ def random_train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate
         #     break
 
 
-def pretrain_lstm(lstm, n_epochs, epoch_size, criterion, learning_rate, random=True, print_every=None, verbose=True):
+def pretrain_model(lstm, n_epochs, epoch_size, criterion, learning_rate, random=True, print_every=None, verbose=True):
     """
     Pretrain model on a dataset containing obscene words
 
@@ -384,10 +459,10 @@ def pretrain_lstm(lstm, n_epochs, epoch_size, criterion, learning_rate, random=T
     if random:
         random_sampler = RandomSampler(pretrain_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
         pretrain_dataloader = DataLoader(pretrain_set, batch_size=batch_size, shuffle=False, sampler=random_sampler)
-        random_train_lstm(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
+        random_train_model(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
     else:
         pretrain_dataloader = DataLoader(pretrain_set, batch_size=batch_size, shuffle=True)
-        train_lstm(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
+        train_model(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
 
 
 def compute_pretrain_set(train_data, verbose=True):
@@ -470,6 +545,10 @@ def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
 
         hidden = decoder.init_h_c()
         cell = decoder.init_h_c()
+        if type(decoder) == LSTM:
+            hc = hidden, cell
+        else:
+            hc = (hidden, )
 
         # print(start_letters)
 
@@ -491,7 +570,7 @@ def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
         # # print(input.size())
 
         for i in range(max_length):  # There is a max length to avoid too long computing time.
-            output, (hidden, cell) = decoder(input.to(device), hidden.to(device), cell.to(device))
+            output, hc = decoder(input.to(device), *(item.to(device) for item in hc))
             # print(output)
             # predicted_letters_indices = [argmax(letter_one_hot[0]) for letter_one_hot in output]
             # predicted_letters_indices = [[argmax(letter_one_hot[i]) for letter_one_hot in output] for i in range(len(output_passwords))]
@@ -771,6 +850,8 @@ if __name__ == '__main__':
         train_set = train_set[-1000:]
         n_epochs = 1_000
         eval_set = eval_set[:100]
+        n_tests = 10
+        n_epochs = 1
 
     random_sampler = RandomSampler(train_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
     # batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
@@ -793,10 +874,21 @@ if __name__ == '__main__':
         use_softmax=use_softmax
     )
 
+    # lstm1 = GRU(
+    #     input_size=input_size,
+    #     hidden_size=hidden_size,
+    #     output_size=output_size,
+    #     batch_size=batch_size,
+    #     n_layers=n_layers,
+    #     bidirectional=bidirectional,
+    #     dropout_value=dropout_value,
+    #     use_softmax=use_softmax
+    # )
+
     print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_pretrain:", have_to_pretrain, "({})".format(type(have_to_pretrain)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
 
     if have_to_pretrain:
-        pretrain_lstm(
+        pretrain_model(
             lstm1,
             n_pretrain_epochs,
             epoch_size,
@@ -824,7 +916,7 @@ if __name__ == '__main__':
         ])
         print("Train model \"{}\"".format(model_name))
         if not random_train:
-            train_lstm(
+            train_model(
                 lstm1,
                 batch_train_dataloader,
                 n_epochs=n_epochs,
@@ -834,7 +926,7 @@ if __name__ == '__main__':
                 verbose=verbose
             )
         else:
-            random_train_lstm(
+            random_train_model(
                 lstm1,
                 batch_train_dataloader,
                 n_epochs=n_epochs,
