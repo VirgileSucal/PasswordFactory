@@ -390,6 +390,49 @@ def pretrain_lstm(lstm, n_epochs, epoch_size, criterion, learning_rate, random=T
         train_lstm(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
 
 
+def compute_pretrain_set(train_data, verbose=True):
+    pretrain_set = tools.extract_pretrain_data()
+    # train_data = train_data[:1000]
+    # pretrain_set = pretrain_set[:1000]
+    selected_train_data, selected_words = [], []
+    train_size, words_size = len(train_data), len(pretrain_set)
+    train_counter, words_counter, train_percent, words_percent = -1, -1, -1, -1
+    print_update = False
+    for pw in train_data:
+        train_counter += 1
+        for word in pretrain_set:
+            words_counter += 1
+            if pw.lower().find(word.lower()) > -1:
+                if pw not in selected_train_data:
+                    selected_train_data.append(pw)  # Don't remove it: it must be added several times if it contains several words.
+                    tools.write_file(consts.selected_train_data, pw + "\n", 'a')
+                if word not in selected_words:
+                    selected_words.append(word)
+                    tools.write_file(consts.selected_pretrain_data, word + "\n", 'a')
+            train_percent_tmp = round((train_counter / train_size) * 100, 2)
+            # train_percent_tmp = int((train_counter / train_size) * 100)
+            words_percent_tmp = int((words_counter / words_size) * 100)
+            if train_percent_tmp > train_percent:
+                train_percent = train_percent_tmp
+                print_update = True
+            # if words_percent_tmp > words_percent:
+            #     words_percent = words_percent_tmp
+            #     print_update = True
+            if print_update:
+                print("passwords: {} % ; words: {} %".format(train_percent, words_percent))#, end="\r")
+                with open("tmp_print.txt", "a") as file:  # TODO: Only for tests, remove it.
+                    file.write("passwords: {} % ; words: {} %\n".format(train_percent, words_percent))
+            print_update = False
+        words_counter, words_percent = -1, -1
+    return selected_train_data, selected_words
+
+
+def create_pretrain_files(train_data):
+    selected_train_data, selected_words = compute_pretrain_set(train_data)
+    # tools.write_file(consts.selected_train_data, selected_train_data)
+    # tools.write_file(consts.selected_pretrain_data, selected_words)
+
+
 def argmax(float_list):
     max_val = float_list[0]
     max_idx = 0
@@ -402,16 +445,23 @@ def argmax(float_list):
 
 
 def print_progress(total, acc, start, iter, size):
+    global print_progress_current_percent
+    print_progress_current_percent = -1
     bar_len = 50
     filled_len = int(round(bar_len * iter / float(total)))
     percents = round(100.0 * iter / float(total), 1)
+
+    current_percent = (100 * acc / size)
+    if current_percent <= print_progress_current_percent:
+        return
+    print_progress_current_percent = current_percent
 
     if filled_len == 0:
         bar = '>' * filled_len + ' ' * (bar_len - filled_len)
     else:
         bar = '=' * (filled_len - 1) + '>' + ' ' * (bar_len - filled_len)
 
-    sys.stdout.write('[%s] %s%s => coverage of %.3f %% (%d) on %s \r' % (bar, percents, ' %', (100 * acc / size), acc, time_since(start)))
+    sys.stdout.write('[%s] %s%s => coverage of %.3f %% (%d) on %s \r' % (bar, percents, ' %', current_percent, acc, time_since(start)))
     sys.stdout.flush()
 
 
@@ -453,7 +503,7 @@ def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
             # if predicted_letters_indices[0] < consts.vocab_start_idx:  # If letter is EOS
             #     break
             if sum([pred >= consts.vocab_start_idx for pred in predicted_letters_indices]) == 0:  # To make tests faster.
-                print([pred for pred in predicted_letters_indices])
+                # print([pred for pred in predicted_letters_indices])
                 break  # TODO: they don't always end on same letter.
 
             next_letters = [get_vocab()[predicted] for predicted in predicted_letters_indices]
@@ -492,7 +542,7 @@ def get_first_letters(n, first_letters=None):
     return get_first_letters(n - 1, first_letters)
 
 
-def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=True):
+def test(model, test_data, n_tests, number_of_first_letters=1, max_length=128, verbose=True):
 
     start = time()
     accuracy = 0
@@ -500,12 +550,12 @@ def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=Tr
     batch_size = model.batch_size
     print(batch_size)
     current_batch = []
-    remainer = int(nb_samples)
+    remainer = int(n_tests)
 
-    print("Eval data size:", nb_samples)
+    print("Eval data size:", nb_samples, "; number of tests:", n_tests)
 
     # i = 0
-    for i in range(1, nb_samples + 1):
+    for i in range(1, n_tests + 1):
 
         starting_letter = ""
         for _ in range(number_of_first_letters):
@@ -519,9 +569,9 @@ def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=Tr
 
             predicted_passwords = generate_passwords_batches(model, current_batch, max_length=max_length)
             # print("predicted", predicted_passwords)
-            if verbose:
-                # print("predicted", predicted_passwords[0])
-                print("predicted", predicted_passwords)
+            # if verbose:
+            #     # print("predicted", predicted_passwords[0])
+            #     print("predicted", predicted_passwords)
 
             for predicted in predicted_passwords:
                 if predicted in test_data:
@@ -532,7 +582,7 @@ def test(model, test_data, number_of_first_letters=1, max_length=128, verbose=Tr
             current_batch = []
 
             if verbose:
-                print_progress(total=nb_samples, acc=accuracy, start=start, iter=i, size=len(test_data))
+                print_progress(total=n_tests, acc=accuracy, start=start, iter=i, size=n_tests)
 
     accuracy = 100 * accuracy / (nb_samples - remainer)
     print('\nCoverage: ', accuracy, '%')
@@ -635,7 +685,9 @@ def get_args():
 
 
 if __name__ == '__main__':
-    
+    run_id = time()
+    # sys.stdout = open(consts.sdtout_path.format(run_id), 'a')
+
     args = get_args()
     have_to_train = tools.parse_bools(args.train)
     have_to_eval = tools.parse_bools(args.eval)
@@ -645,16 +697,17 @@ if __name__ == '__main__':
     have_to_pretrain = tools.parse_bools(args.pretrain) if have_to_train else False
     bruteforce = tools.parse_bools(args.bruteforce)
     verbose = tools.parse_bools(args.verbose)
-    random = args.random
+    random_train = args.random
     model_name = args.model
     # tools.init_dir(model_name)
     print(model_name)
 
     # have_to_train = True
+    # have_to_eval = True
     # have_to_train = False
     # have_to_eval = False
     # verbose = False
-    bruteforce = True
+    # bruteforce = True
     # debug = True
 
     # train_set, eval_set = extract_data()
@@ -662,12 +715,15 @@ if __name__ == '__main__':
     get_vocab(train_set)  # Init vocab
     print(get_vocab(train_set))
 
+    # create_pretrain_files(train_set)
+    # selected_train_data, selected_pretrain_data = tools.extract_selected_train_data(), tools.extract_selected_pretrain_data()
+    # # print("OK")
+    # # exit(0)
+
     input_size = get_vocab_size()
     hidden_size = 256
     output_size = get_vocab_size()
     batch_size = 1
-    # batch_size = 2
-    # batch_size = 10
     # batch_size = 64
     # batch_size = 128
     n_layers = 1
@@ -679,6 +735,8 @@ if __name__ == '__main__':
     n_epochs = 1_000
     n_epochs = 10_000
     n_epochs = 1_000_000
+    n_pretrain_epochs = 1_000
+    n_tests = 10_000
     # n_epochs = 100
     # n_epochs = 20
     # n_epochs = 256
@@ -710,9 +768,9 @@ if __name__ == '__main__':
 
     if debug:
         print("Debug mode !")
-        # train_set = train_set[-1000:]
-        # n_epochs = 1_000
-        # eval_set = eval_set[:100]
+        train_set = train_set[-1000:]
+        n_epochs = 1_000
+        eval_set = eval_set[:100]
 
     random_sampler = RandomSampler(train_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
     # batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
@@ -740,11 +798,11 @@ if __name__ == '__main__':
     if have_to_pretrain:
         pretrain_lstm(
             lstm1,
-            n_epochs,
+            n_pretrain_epochs,
             epoch_size,
             criterion,
             learning_rate,
-            random=random,
+            random=random_train,
             print_every=print_every,
             verbose=verbose
         )
@@ -760,29 +818,32 @@ if __name__ == '__main__':
             "use_softmax={}".format(use_softmax),
             "batch_size={}".format(batch_size),
             "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
-            "train_size={}".format(len(batch_train_dataloader)),
-            "{}".format(time())
+            "random_train={}".format(random_train),
+            "train_size={}".format(str(len(batch_train_dataloader)) + "" if not random_train else str(n_epochs * batch_size)),
+            "{}".format(run_id)
         ])
         print("Train model \"{}\"".format(model_name))
-        # train_lstm(
-        #     lstm1,
-        #     batch_train_dataloader,
-        #     n_epochs=n_epochs,
-        #     criterion=criterion,
-        #     learning_rate=learning_rate,
-        #     print_every=print_every,
-        #     verbose=verbose
-        # )
-        random_train_lstm(
-            lstm1,
-            batch_train_dataloader,
-            n_epochs=n_epochs,
-            criterion=criterion,
-            learning_rate=learning_rate,
-            print_every=print_every,
-            # epoch_size=epoch_size,
-            verbose=verbose
-        )
+        if not random_train:
+            train_lstm(
+                lstm1,
+                batch_train_dataloader,
+                n_epochs=n_epochs,
+                criterion=criterion,
+                learning_rate=learning_rate,
+                print_every=print_every,
+                verbose=verbose
+            )
+        else:
+            random_train_lstm(
+                lstm1,
+                batch_train_dataloader,
+                n_epochs=n_epochs,
+                criterion=criterion,
+                learning_rate=learning_rate,
+                print_every=print_every,
+                # epoch_size=epoch_size,
+                verbose=verbose
+            )
         save_model(lstm1, model_name)
     else:
         print("Load model \"{}\"".format(model_name))
@@ -791,16 +852,18 @@ if __name__ == '__main__':
     if have_to_eval:
         print("\n\nEVAL\n")
         # test(lstm1, batch_eval_dataloader)
-        test(lstm1, eval_set, number_of_first_letters, max_length, verbose=verbose)
+        test(lstm1, eval_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
         # if bruteforce:
         #     test_brute_force(eval_set, batch_size=lstm1.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
 
     if have_to_test:
         print("\n\nTEST\n")
         # test_dataloader = DataLoader(test_set, batch_size=lstm1.batch_size, shuffle=True)
-        test(lstm1, test_set, number_of_first_letters, max_length, verbose=verbose)
+        test(lstm1, test_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
         eval_set = test_set
 
     if bruteforce:
         test_brute_force(eval_set, batch_size=lstm1.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
+
+# sys.stdout.close()
 

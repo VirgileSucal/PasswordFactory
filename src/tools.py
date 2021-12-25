@@ -18,6 +18,11 @@ def read_file(path):
     return data
 
 
+def write_file(path, lines, mode='w'):
+    with open(path, mode) as file:
+        file.writelines(lines)
+
+
 # def extract_data():
 #     train_set, pretrain_set, eval_set = None, None, None
 #     with open(consts.train_set) as train_file:
@@ -38,6 +43,14 @@ def extract_pretrain_data():
     with open(consts.pretrain_set) as pretrain_file:
         pretrain_set = pretrain_file.read().split()
     return pretrain_set
+
+
+def extract_selected_train_data():
+    return read_file(consts.selected_train_data)
+
+
+def extract_selected_pretrain_data():
+    return read_file(consts.selected_pretrain_data)
 
 
 def extract_eval_data():
