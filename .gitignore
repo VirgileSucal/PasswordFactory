@@ -133,3 +133,5 @@ dmypy.json
 workspace.xml
 output/
 /src/tmp_print.txt
+/src/run.sh
+/src/init.sh

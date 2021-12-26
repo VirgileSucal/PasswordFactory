@@ -348,53 +348,6 @@ def train_model_mini_batch(model, batches, criterion, learning_rate):
     return output, loss.item() / len(batches)
 
 
-# def train_lstm(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
-#
-#     assert train_dataloader is not None
-#     assert n_epochs > 0
-#
-#     start = time()
-#     all_losses = []
-#     total_loss = 0
-#     best_loss = (100, 0)
-#     n_iters = len(train_dataloader)
-#     epoch_size = n_iters // min(n_epochs, n_iters)
-#     print("Data size:", n_iters, "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", lstm.batch_size)
-#     if print_every is None:
-#         print_every = epoch_size
-#
-#     current_epoch_batches = []
-#
-#     epoch = 0
-#     iter = 0
-#     for batch in train_dataloader:
-#
-#         current_epoch_batches.append(batch)
-#         iter += 1
-#
-#         if iter % epoch_size == 0:  # All batches for this epoch have been loaded.
-#             epoch += 1
-#
-#             batches = init_batches(current_epoch_batches)
-#             # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
-#             if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
-#                 continue
-#
-#             output, loss = train_lstm_mini_batch(lstm, batches, criterion, learning_rate)
-#             total_loss += loss
-#             if loss < best_loss[0]:
-#                 best_loss = (loss, iter)
-#             all_losses.append(loss)
-#
-#             if verbose and iter % print_every == 0:
-#                 print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, iter / n_iters * 100, total_loss / iter, loss))
-#
-#             current_epoch_batches = []
-#
-#         # if epoch >= 20:  # TODO: Only for tests (remove it)
-#         #     break
-
-
 def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, verbose=True):
 
     assert train_dataloader is not None
@@ -805,9 +758,9 @@ def load_model(model_name):
 
 def get_args():
     parser = ArgumentParser()
-    parser.add_argument("-r", "--run", default=consts.default_model_file, type=str, help="Name of the model saved file")
+    # parser.add_argument("--run", default=consts.default_run_arg, type=str, help="Name of the model saved file")
     parser.add_argument(
-        "-m", "--model", default=str(path.join(consts.models_dir, consts.default_model_file)), type=str,
+        "-m", "--model", default=consts.default_model_arg, type=str,
         help="Path of the model to save for training or to load for evaluating/testing (eval/test) [path/to/the/model]"
     )
     # parser.add_argument(
@@ -815,35 +768,35 @@ def get_args():
     #     help="number of samples to generate [< 1000]."
     # )
     parser.add_argument(
-        "-t", "--train", default=True, type=str,
+        "-t", "--train", default=consts.default_train_arg, type=str,
         help="Train the model (if False, load the model) [default True]"
     )
     parser.add_argument(
-        "-p", "--pretrain", default=False, type=str,
+        "-p", "--pretrain", default=consts.default_pretrain_arg, type=str,
         help="Pretrain the model (if --train is False, --pretrain is False) [default False]"
     )
-    parser.add_argument("-e", "--eval", default=True, type=str, help="Evaluate the model [default True]")
+    parser.add_argument("-e", "--eval", default=consts.default_eval_arg, type=str, help="Evaluate the model [default True]")
     parser.add_argument(
-        "-b", "--bruteforce", default=False, type=str,
+        "-b", "--bruteforce", default=consts.default_bruteforce_arg, type=str,
         help="Evaluate brute force method coverage [default False]"
     )
-    parser.add_argument("-a", "--random", default=False, type=str, help="Use random train [default False]")
-    parser.add_argument("-d", "--debug", default=False, type=str, help="Activate debug code [default False]")
-    parser.add_argument("-v", "--verbose", default=True, type=str, help="Print log [default True]")
-    parser.add_argument("-s", "--test_set", default=None, type=str, help="Path to dataset for tests")
+    parser.add_argument("-r", "--random", default=consts.default_random_arg, type=str, help="Use random train [default False]")
+    parser.add_argument("-d", "--debug", default=consts.default_debug_arg, type=str, help="Activate debug code [default False]")
+    parser.add_argument("-v", "--verbose", default=consts.default_verbose_arg, type=str, help="Print log [default True]")
+    parser.add_argument("-s", "--test_set", default=consts.default_test_set_arg, type=str, help="Path to dataset for tests")
 
-    parser.add_argument('-c', '--nn_class', default='LSTM', type=str, help="Neural network to use [default LSTM]")
-    parser.add_argument("--hidden_size", default=256, type=int, help="Hidden size [default False]")
-    parser.add_argument("--batch_size", default=1, type=int, help="Batch size [default False]")
-    parser.add_argument("--n_layers", default=1, type=int, help="Number of layers [default False]")
-    parser.add_argument("--bidirectional", default=False, type=str, help="Use a bidirectional model [default False]")
-    parser.add_argument("--dropout_value", default=0.0, type=float, help="Dropout value (if it is 0, there isn't any dropout) [default 0]")
-    parser.add_argument("--use_softmax", default=False, type=str, help="use_softmax [default False]")
-    parser.add_argument("--n_epochs", default=100_000, type=int, help="Number of epochs [default 100,000]")
-    parser.add_argument("--n_pretrain_epochs", default=1_000, type=int, help="Number of pretrain_epochs [default 1,000]")
-    parser.add_argument("--n_tests", default=10_000, type=int, help="Number of tests [default 10,000]")
-    parser.add_argument("--lr", default=0.005, type=float, help="Learning rate [default 0.005]")
-    parser.add_argument("--epoch_size", default=1, type=int, help="Epoch size [default 1]")
+    parser.add_argument('-c', '--nn_class', default=consts.default_nn_class_arg, type=str, help="Neural network to use [default LSTM]")
+    parser.add_argument("--hidden_size", default=consts.default_hidden_size_arg, type=int, help="Hidden size [default False]")
+    parser.add_argument("--batch_size", default=consts.default_batch_size_arg, type=int, help="Batch size [default False]")
+    parser.add_argument("--n_layers", default=consts.default_n_layers_arg, type=int, help="Number of layers [default False]")
+    parser.add_argument("--bidirectional", default=consts.default_bidirectional_arg, type=str, help="Use a bidirectional model [default False]")
+    parser.add_argument("--dropout_value", default=consts.default_dropout_value_arg, type=float, help="Dropout value (if it is 0, there isn't any dropout) [default 0]")
+    parser.add_argument("--use_softmax", default=consts.default_use_softmax_arg, type=str, help="use_softmax [default False]")
+    parser.add_argument("--n_epochs", default=consts.default_n_epochs_arg, type=int, help="Number of epochs [default 100,000]")
+    parser.add_argument("--n_pretrain_epochs", default=consts.default_n_pretrain_epochs_arg, type=int, help="Number of pretrain_epochs [default 1,000]")
+    parser.add_argument("--n_tests", default=consts.default_n_tests_arg, type=int, help="Number of tests [default 10,000]")
+    parser.add_argument("--lr", default=consts.default_lr_arg, type=float, help="Learning rate [default 0.005]")
+    parser.add_argument("--epoch_size", default=consts.default_epoch_size_arg, type=int, help="Epoch size [default 1]")
 
     return parser.parse_args()
 
