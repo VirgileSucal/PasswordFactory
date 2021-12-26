@@ -60,6 +60,77 @@ def get_vocab_size(data=None) -> int:
     return __vocab_size
 
 
+class RNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, batch_size=1, n_layers=1, bidirectional=False, dropout_value=0, use_softmax=False):
+        super(RNN, self).__init__()
+
+        assert input_size > 0
+        assert hidden_size > 0
+        assert output_size > 0
+        assert n_layers > 0
+        assert batch_size > 0
+        assert 0 <= dropout_value < 1
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.batch_size = batch_size
+        self.bidirectional = bidirectional
+        self.dropout_value = dropout_value
+        self.use_softmax = use_softmax
+        self.use_softmax = False
+
+        self.encoder = nn.Embedding(self.input_size, self.hidden_size)  # input_size = vocab size, but entry is index, not one_hot
+        self.encoder.to(device)
+        self.rnn = nn.RNN(
+            input_size=self.hidden_size,
+            hidden_size=self.hidden_size,
+            num_layers=self.n_layers,
+            bidirectional=self.bidirectional,
+            dropout=self.dropout_value,
+            batch_first=True
+        )
+        self.rnn.to(device)
+        self.decoder = nn.Linear(self.hidden_size, self.output_size)
+        self.decoder.to(device)
+
+        if bool(self.dropout_value):
+            self.dropout = nn.Dropout(self.dropout_value)
+            self.dropout.to(device)
+        if self.use_softmax:
+            self.softmax = nn.Softmax(dim=1)
+            self.softmax.to(device)
+
+    def forward(self, input, hidden):
+        input = self.encoder(input)
+        output, hidden = self.rnn(input, hidden)
+        output = self.decoder(output)
+
+        if bool(self.dropout_value):
+            output = self.dropout(output)
+        if self.use_softmax:
+            output = self.softmax(output)
+
+        return output, (hidden, )
+
+    def init_h_c_with_zeros(self):
+        return Variable(torch.zeros(
+            (1 + int(self.bidirectional)) * self.n_layers,
+            self.batch_size,
+            self.hidden_size,
+            device=device
+        ))
+
+    def init_h_c(self):
+        return Variable(torch.rand(
+            (1 + int(self.bidirectional)) * self.n_layers,
+            self.batch_size,
+            self.hidden_size,
+            device=device
+        ))
+
+
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, batch_size=1, n_layers=1, bidirectional=False, dropout_value=0, use_softmax=False):
         super(LSTM, self).__init__()
@@ -760,77 +831,93 @@ def get_args():
     parser.add_argument("-d", "--debug", default=False, type=str, help="Activate debug code [default False]")
     parser.add_argument("-v", "--verbose", default=True, type=str, help="Print log [default True]")
     parser.add_argument("-s", "--test_set", default=None, type=str, help="Path to dataset for tests")
+
+    parser.add_argument('-c', '--nn_class', default='LSTM', type=str, help="Neural network to use [default LSTM]")
+    parser.add_argument("--hidden_size", default=256, type=int, help="Hidden size [default False]")
+    parser.add_argument("--batch_size", default=1, type=int, help="Batch size [default False]")
+    parser.add_argument("--n_layers", default=1, type=int, help="Number of layers [default False]")
+    parser.add_argument("--bidirectional", default=False, type=str, help="Use a bidirectional model [default False]")
+    parser.add_argument("--dropout_value", default=0.0, type=float, help="Dropout value (if it is 0, there isn't any dropout) [default 0]")
+    parser.add_argument("--use_softmax", default=False, type=str, help="use_softmax [default False]")
+    parser.add_argument("--n_epochs", default=100_000, type=int, help="Number of epochs [default 100,000]")
+    parser.add_argument("--n_pretrain_epochs", default=1_000, type=int, help="Number of pretrain_epochs [default 1,000]")
+    parser.add_argument("--n_tests", default=10_000, type=int, help="Number of tests [default 10,000]")
+    parser.add_argument("--lr", default=0.005, type=float, help="Learning rate [default 0.005]")
+    parser.add_argument("--epoch_size", default=1, type=int, help="Epoch size [default 1]")
+
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     run_id = time()
-    # sys.stdout = open(consts.sdtout_path.format(run_id), 'a')
-
     args = get_args()
+
     have_to_train = tools.parse_bools(args.train)
-    have_to_eval = tools.parse_bools(args.eval)
-    test_set = None if args.test_set is None else tools.read_file(args.test_set)
-    have_to_test = False if test_set is None else True
-    debug = tools.parse_bools(args.debug)
-    have_to_pretrain = tools.parse_bools(args.pretrain) if have_to_train else False
-    bruteforce = tools.parse_bools(args.bruteforce)
-    verbose = tools.parse_bools(args.verbose)
-    random_train = args.random
-    model_name = args.model
-    # tools.init_dir(model_name)
-    print(model_name)
-
-    # have_to_train = True
-    # have_to_eval = True
-    # have_to_train = False
-    # have_to_eval = False
-    # verbose = False
-    # bruteforce = True
-    # debug = True
-
-    # train_set, eval_set = extract_data()
-    train_set, eval_set = tools.extract_train_data(), tools.extract_eval_data()
+    train_set = tools.extract_train_data()
     get_vocab(train_set)  # Init vocab
     print(get_vocab(train_set))
+    random_train = args.random
+    have_to_pretrain = tools.parse_bools(args.pretrain) if have_to_train else False
 
-    # create_pretrain_files(train_set)
-    # selected_train_data, selected_pretrain_data = tools.extract_selected_train_data(), tools.extract_selected_pretrain_data()
-    # # print("OK")
-    # # exit(0)
+    eval_set = None
+    have_to_eval = tools.parse_bools(args.eval)
+    if have_to_eval:
+        eval_set = tools.extract_eval_data()
 
+    test_set = None if args.test_set is None else tools.read_file(args.test_set)
+    have_to_test = False if test_set is None else True
+
+    debug = tools.parse_bools(args.debug)
+    bruteforce = tools.parse_bools(args.bruteforce)
+    verbose = tools.parse_bools(args.verbose)
+    model_name = args.model
+    tools.init_dir(model_name)
+    print(model_name)
+
+    nn_classes = {
+        "RNN": RNN,
+        "LSTM": LSTM,
+        "GRU": GRU,
+    }
+    nn_class = nn_classes["LSTM"]
+    for k, v in nn_classes.items():
+        if args.nn_class == k:
+            nn_class = v
     input_size = get_vocab_size()
-    hidden_size = 256
+    hidden_size = args.hidden_size
     output_size = get_vocab_size()
-    batch_size = 1
-    # batch_size = 64
-    # batch_size = 128
-    n_layers = 1
-    bidirectional = False
-    dropout_value = 0
-    use_softmax = False
-    # use_softmax = True
-    n_epochs = 1
-    n_epochs = 1_000
-    n_epochs = 10_000
-    n_epochs = 1_000_000
-    n_pretrain_epochs = 1_000
-    n_tests = 10_000
-    # n_epochs = 100
-    # n_epochs = 20
-    # n_epochs = 256
+    batch_size = args.batch_size
+    n_layers = args.n_layers
+    bidirectional = args.bidirectional
+    dropout_value = args.dropout_value
+    use_softmax = args.use_softmax
+    n_epochs = args.n_epochs
+    n_pretrain_epochs = args.n_pretrain_epochs
+    n_tests = args.n_tests
+    learning_rate = args.lr
+    epoch_size = args.epoch_size
     criterion = nn.CrossEntropyLoss()
-    learning_rate = 0.005
-    # learning_rate = 0.05
-    # learning_rate = 0.1
-    print_every = 10
-    print_every = None
-    print_every = 1
-    print_every = 100
+
+    if have_to_pretrain:
+        if not (path.exists(consts.selected_train_data) and path.exists(consts.selected_pretrain_data)):
+            create_pretrain_files(train_set)
+        selected_train_data, selected_pretrain_data = tools.extract_selected_train_data(), tools.extract_selected_pretrain_data()
+
+    # print_every = None
+    # print_every = 1
+    # print_every = 100
     print_every = 1000
     number_of_first_letters = 1
     max_length = 128
-    epoch_size = 1
+
+    if debug:
+        print("Use Debug mode")
+        train_set = train_set[-1000:]
+        n_epochs = 1_000
+        if have_to_eval:
+            eval_set = eval_set[:100]
+        n_tests = 10
+        n_epochs = 1
 
     hyper_parameters = {
         "hidden_size": None,
@@ -845,25 +932,16 @@ if __name__ == '__main__':
     }
     # print(hyper_parameters)
 
-    if debug:
-        print("Debug mode !")
-        train_set = train_set[-1000:]
-        n_epochs = 1_000
-        eval_set = eval_set[:100]
-        n_tests = 10
-        n_epochs = 1
+    if not random_train:
+        batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    else:
+        random_sampler = RandomSampler(train_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
+        batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=False, sampler=random_sampler)
+    # if have_to_eval:
+    #     # batch_eval_dataloader = DataLoader(eval_set, batch_size=batch_size, shuffle=True)
+    #     batch_eval_dataloader = DataLoader(eval_set, batch_size=1, shuffle=True)
 
-    random_sampler = RandomSampler(train_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
-    # batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    batch_train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=False, sampler=random_sampler)
-    # batch_eval_dataloader = DataLoader(eval_set, batch_size=batch_size, shuffle=True)
-    batch_eval_dataloader = DataLoader(eval_set, batch_size=1, shuffle=True)
-
-    # print(len(batch_train_dataloader))
-    # for batch in batch_train_dataloader:
-    #     print(batch)
-
-    lstm1 = LSTM(
+    model = nn_class(
         input_size=input_size,
         hidden_size=hidden_size,
         output_size=output_size,
@@ -872,24 +950,14 @@ if __name__ == '__main__':
         bidirectional=bidirectional,
         dropout_value=dropout_value,
         use_softmax=use_softmax
-    )
-
-    # lstm1 = GRU(
-    #     input_size=input_size,
-    #     hidden_size=hidden_size,
-    #     output_size=output_size,
-    #     batch_size=batch_size,
-    #     n_layers=n_layers,
-    #     bidirectional=bidirectional,
-    #     dropout_value=dropout_value,
-    #     use_softmax=use_softmax
-    # )
+    ).to(device)
+    decoder_optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_pretrain:", have_to_pretrain, "({})".format(type(have_to_pretrain)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
 
     if have_to_pretrain:
         pretrain_model(
-            lstm1,
+            model,
             n_pretrain_epochs,
             epoch_size,
             criterion,
@@ -917,7 +985,7 @@ if __name__ == '__main__':
         print("Train model \"{}\"".format(model_name))
         if not random_train:
             train_model(
-                lstm1,
+                model,
                 batch_train_dataloader,
                 n_epochs=n_epochs,
                 criterion=criterion,
@@ -927,7 +995,7 @@ if __name__ == '__main__':
             )
         else:
             random_train_model(
-                lstm1,
+                model,
                 batch_train_dataloader,
                 n_epochs=n_epochs,
                 criterion=criterion,
@@ -936,26 +1004,24 @@ if __name__ == '__main__':
                 # epoch_size=epoch_size,
                 verbose=verbose
             )
-        save_model(lstm1, model_name)
+        save_model(model, model_name)
     else:
         print("Load model \"{}\"".format(model_name))
-        lstm1 = load_model(model_name)
+        model = load_model(model_name)
 
     if have_to_eval:
         print("\n\nEVAL\n")
         # test(lstm1, batch_eval_dataloader)
-        test(lstm1, eval_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
+        test(model, eval_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
         # if bruteforce:
         #     test_brute_force(eval_set, batch_size=lstm1.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
 
     if have_to_test:
         print("\n\nTEST\n")
         # test_dataloader = DataLoader(test_set, batch_size=lstm1.batch_size, shuffle=True)
-        test(lstm1, test_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
+        test(model, test_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
         eval_set = test_set
 
     if bruteforce:
-        test_brute_force(eval_set, batch_size=lstm1.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
-
-# sys.stdout.close()
+        test_brute_force(eval_set, batch_size=model.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
 
