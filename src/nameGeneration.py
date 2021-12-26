@@ -214,6 +214,12 @@ def train(input_line_tensor, target_line_tensor):
 
 
 def timeSince(since):
+    """
+    This method calculates the elapsed time between the start of a method and the current time
+
+    :param since: the starting date
+    :return: the elapsed time
+    """
     now = time.time()
     s = now - since
     m = math.floor(s / 60)
@@ -222,6 +228,10 @@ def timeSince(since):
 
 
 class RNNLight(nn.Module):
+    """
+    This class contains all methods related to the RNN model
+    """
+
     def __init__(self, input_size, hidden_size, output_size):
         super(RNNLight, self).__init__()
 
@@ -268,6 +278,10 @@ class RNNLight(nn.Module):
 
 
 class RNN(nn.Module):
+    """
+    This class contains all methods related to the RNN model
+    """
+
     def __init__(self, input_size, hidden_size, output_size):
         super(RNN, self).__init__()
 
@@ -311,6 +325,10 @@ class RNN(nn.Module):
 
 
 class LSTM(nn.Module):
+    """
+    This class contains all methods related to the LSTM model
+    """
+
     def __init__(self, input_size, hidden_size, output_size, n_layers=1):
         super(LSTM, self).__init__()
         self.input_size = input_size
@@ -344,6 +362,10 @@ class LSTM(nn.Module):
 
 
 class GRU(nn.Module):
+    """
+    This class contains all methods related to the GRU model
+    """
+
     def __init__(self, input_size, hidden_size, output_size, n_layers=1):
         super(GRU, self).__init__()
         self.input_size = input_size

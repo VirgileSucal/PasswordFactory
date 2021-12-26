@@ -8,3 +8,6 @@ models_dir = output_dir + "models/"
 train_set = data_dir + "TrainEval/train.txt"
 eval_set = data_dir + "TrainEval/eval.txt"
 fig_path = output_dir + "fig/"
+default_model_file = "lstm"
+default_n_samples = 10_000
+bools = {"true": True, "false": False}
