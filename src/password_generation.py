@@ -856,7 +856,7 @@ if __name__ == '__main__':
     train_set = tools.extract_train_data()
     get_vocab(train_set)  # Init vocab
     print(get_vocab(train_set))
-    random_train = args.random
+    random_train = tools.parse_bools(args.random)
     have_to_pretrain = tools.parse_bools(args.pretrain) if have_to_train else False
 
     eval_set = None
@@ -888,9 +888,9 @@ if __name__ == '__main__':
     output_size = get_vocab_size()
     batch_size = args.batch_size
     n_layers = args.n_layers
-    bidirectional = args.bidirectional
+    bidirectional = tools.parse_bools(args.bidirectional)
     dropout_value = args.dropout_value
-    use_softmax = args.use_softmax
+    use_softmax = tools.parse_bools(args.use_softmax)
     n_epochs = args.n_epochs
     n_pretrain_epochs = args.n_pretrain_epochs
     n_tests = args.n_tests
@@ -914,6 +914,8 @@ if __name__ == '__main__':
         print("Use Debug mode")
         train_set = train_set[-1000:]
         n_epochs = 1_000
+        if not random_train:
+            n_epochs = 1
         if have_to_eval:
             eval_set = eval_set[:100]
         n_tests = 10
