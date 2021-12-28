@@ -39,7 +39,7 @@ if __name__ == '__main__':
         # "n_epochs": [100_000],
         "n_pretrain_epochs": [1_000],
         # "n_tests": [10_000],
-        "lr": [0.005, 0.05, 0.005],
+        "lr": [0.005, 0.05, 0.001],
         # "epoch_size": [1],
     }
 
@@ -48,17 +48,17 @@ if __name__ == '__main__':
     n_epochs_random_list = [1_000_000]
     n_epochs_list = [20]
 
-    output = subprocess.run(
-        ["sh", join(
-            dirname(abspath(__file__)),
-            "init.sh"
-        )],  # A shell script to initialize workspace.
-        capture_output=True
-    )
-    print(output.args)
-    print(output.stdout)
-    print(output.stderr)
-    print(output.returncode)
+    # output = subprocess.run(
+    #     ["sh", join(
+    #         dirname(abspath(__file__)),
+    #         "init.sh"
+    #     )],  # A shell script to initialize workspace.
+    #     capture_output=True
+    # )
+    # print(output.args)
+    # print(output.stdout)
+    # print(output.stderr)
+    # print(output.returncode)
     for arg, values in args_lists.items():
         for value in values:
             def_args = {**default_args}
@@ -71,7 +71,8 @@ if __name__ == '__main__':
                 "--{} {}".format(a, str(v)) for a, v in def_args.items() if a != arg
             ])
             args += " -d True "
-            print(args)
+            # print("args)
+            print("python3 password_generation.py " + args)
             # output = subprocess.run(
             #     ["sh", str(join(dirname(abspath(__file__)), "run.sh")) + " " + args],  # A shell script to run the process.
             #     capture_output=True

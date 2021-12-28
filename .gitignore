@@ -132,6 +132,7 @@ dmypy.json
 .idea/
 workspace.xml
 output/
-/src/tmp_print.txt
+/src/tmp_print*
 /src/run.sh
 /src/init.sh
+/data/TrainEval/

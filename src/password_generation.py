@@ -348,7 +348,7 @@ def train_model_mini_batch(model, batches, criterion, learning_rate):
     return output, loss.item() / len(batches)
 
 
-def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, verbose=True):
+def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, model_name=None, verbose=True):
 
     assert train_dataloader is not None
 
@@ -362,7 +362,7 @@ def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_b
     total_loss = 0
     best_loss = (100, 0)
     mini_batches_size = n_iters // min(n_mini_batches, n_iters)
-    print("Data size:", n_iters, "; Epoch size:", mini_batches_size, "; Epochs:", n_mini_batches, "Batch size:", lstm.batch_size)
+    print("Data size:", n_iters, ";Mini Batches size:", mini_batches_size, "; Epochs:", n_mini_batches, "Batch size:", lstm.batch_size)
     if print_every is None:
         print_every = mini_batches_size
 
@@ -393,10 +393,10 @@ def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_b
                 tmp = int(iter / n_iters * 100)
                 if tmp > percent:
                     percent = tmp
-                    with open("tmp_print.txt", "a") as file:  # TODO: Only for tests, remove it.
+                    with open("tmp_print{}.txt".format("" if model_name is None else "_-_" + model_name), "a") as file:  # TODO: Only for tests, remove it.
                         # file.write(str(time_since(start)) + " ; " + str(percent) + " %\n")
-                        file.write('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, iter / n_iters * 100, total_loss / iter, loss) + "\n")
-                print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, iter / n_iters * 100, total_loss / iter, loss))
+                        file.write('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, mini_batches_size, iter / n_iters * 100, total_loss / iter, loss) + "\n")
+                print('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, mini_batches_size, iter / n_iters * 100, total_loss / iter, loss))
                 # print_progress(total=n_mini_batches, acc=best_loss, start=start, iter=mini_batch, size=len(n_mini_batches))
 
 
@@ -406,15 +406,15 @@ def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_b
         #     break
 
 
-def train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
+def train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
 
     for epoch in range(n_epochs):
         if verbose:
             print("\nEpoch:", epoch + 1, "/", n_epochs)
-        train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=print_every, verbose=verbose)
+        train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=print_every, model_name=model_name, verbose=verbose)
 
 
-def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, verbose=True):
+def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
 
     assert train_dataloader is not None
     assert n_epochs > 0
@@ -458,10 +458,10 @@ def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rat
                 tmp = int(it / n_iters * 100)
                 if tmp > percent:
                     percent = tmp
-                    with open("tmp_print.txt", "a") as file:  # TODO: Only for tests, remove it.
+                    with open("tmp_print{}.txt".format("" if model_name is None else "_-_" + model_name), "a") as file:  # TODO: Only for tests, remove it.
                         # file.write(str(time_since(start)) + " ; " + str(percent) + " %\n")
-                        file.write('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, it / n_iters * 100, total_loss / it, loss) + "\n")
-                print('%s (%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, it / n_iters * 100, total_loss / it, loss))
+                        file.write('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, epoch_size, it / n_iters * 100, total_loss / it, loss) + "\n")
+                print('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, epoch_size, it / n_iters * 100, total_loss / it, loss))
 
 
             current_epoch_batches = []
@@ -691,6 +691,53 @@ def test(model, test_data, n_tests, number_of_first_letters=1, max_length=128, v
     print('\nCoverage: ', accuracy, '%')
 
 
+def criterion_eval_batch(model, batches, criterion):
+    hidden = model.init_h_c()
+    cell = model.init_h_c()
+    if type(model) == LSTM:
+        hc = hidden, cell
+    else:
+        hc = (hidden, )
+    model.zero_grad()
+
+    for input_batch, target_batch in batches:
+        if input_batch.size(0) != hidden.size()[1]:
+            continue
+        output, hc = model(input_batch.to(device), *(item.to(device) for item in hc))
+        loss = criterion(output.to(device), target_batch.type(torch.FloatTensor).to(device))
+
+        return output, loss
+
+
+def criterion_eval(lstm, eval_dataloader, criterion, verbose=True):
+
+    assert eval_dataloader is not None
+
+    start = time()
+    n_iters = len(eval_dataloader)
+    remainer = int(n_iters)
+    total_loss = 0
+    print("Data size:", n_iters, "; Batch size:", lstm.batch_size)
+
+    i = 0
+    for batch in eval_dataloader:
+        i += 1
+
+        batches = init_batches([batch])
+        if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
+            continue
+
+        output, loss = criterion_eval_batch(lstm, batches, criterion)
+        total_loss += loss
+        remainer -= 1
+
+        if verbose:
+            print_progress(total=n_iters, acc=loss, start=start, iter=i, size=n_iters)
+
+    accuracy = 100 * total_loss.item() / (n_iters - remainer)
+    print('\nLoss: ', accuracy, '%')
+
+
 def test_brute_force(test_data, batch_size=1, max_length=128, print_every=None, verbose=True):
     start = time()
     accuracy = 0
@@ -871,6 +918,7 @@ if __name__ == '__main__':
             eval_set = eval_set[:100]
         n_tests = 10
         n_epochs = 1
+        print_every = 1
 
     hyper_parameters = {
         "hidden_size": None,
@@ -944,6 +992,7 @@ if __name__ == '__main__':
                 criterion=criterion,
                 learning_rate=learning_rate,
                 print_every=print_every,
+                model_name=model_name,
                 verbose=verbose
             )
         else:
@@ -955,6 +1004,7 @@ if __name__ == '__main__':
                 learning_rate=learning_rate,
                 print_every=print_every,
                 # epoch_size=epoch_size,
+                model_name=model_name,
                 verbose=verbose
             )
         save_model(model, model_name)
@@ -965,6 +1015,8 @@ if __name__ == '__main__':
     if have_to_eval:
         print("\n\nEVAL\n")
         # test(lstm1, batch_eval_dataloader)
+        batch_eval_dataloader = DataLoader(eval_set, batch_size=model.batch_size, shuffle=True)
+        criterion_eval(model, batch_eval_dataloader, criterion, verbose=verbose)
         test(model, eval_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
         # if bruteforce:
         #     test_brute_force(eval_set, batch_size=lstm1.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
