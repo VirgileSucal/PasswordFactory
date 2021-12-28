@@ -70,7 +70,8 @@ if __name__ == '__main__':
             args = "--{} {}".format(arg, str(value)) + " " + " ".join([
                 "--{} {}".format(a, str(v)) for a, v in def_args.items() if a != arg
             ])
-            args += " -d True "
+            # # args += " -d True "
+            # args += " $dbg "
             # print("args)
             print("python3 password_generation.py " + args)
             # output = subprocess.run(
