@@ -326,18 +326,9 @@ def train_model_mini_batch(model, batches, criterion, learning_rate):
     loss = 0
 
     for input_batch, target_batch in batches:
-        # print(input_batch.size(0), hidden.size()[1])
         if input_batch.size(0) != hidden.size()[1]:
             continue
-        # print(input_batch)
-        # print(input_batch.size())
         output, hc = model(input_batch.to(device), *(item.to(device) for item in hc))
-        # print()
-        # print()
-        # print(output)
-        # print(target_batch)
-        # print()
-        # print()
         l = criterion(output.to(device), target_batch.type(torch.FloatTensor).to(device))
         loss += l
 
@@ -380,7 +371,6 @@ def train_model_epoch(model, train_dataloader, criterion, learning_rate, n_mini_
             mini_batch += 1
 
             batches = init_batches(current_epoch_batches)
-            # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
             if batches[0][0].size(0) != model.init_h_c().size()[1]:
                 continue
 
@@ -395,16 +385,12 @@ def train_model_epoch(model, train_dataloader, criterion, learning_rate, n_mini_
                 if tmp > percent:
                     percent = tmp
                     with open("tmp_print{}.txt".format("" if model_name is None else "_-_" + model_name), "a") as file:  # TODO: Only for tests, remove it.
-                        # file.write(str(time_since(start)) + " ; " + str(percent) + " %\n")
                         file.write('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, mini_batches_size, iter / n_iters * 100, total_loss / iter, loss) + "\n")
                 print('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), mini_batch, mini_batches_size, iter / n_iters * 100, total_loss / iter, loss))
                 # print_progress(total=n_mini_batches, acc=best_loss, start=start, iter=mini_batch, size=len(n_mini_batches))
 
 
             current_epoch_batches = []
-
-        # if mini_batch >= 20:  # TODO: Only for tests (remove it)
-        #     break
 
 
 def train_model(model, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
@@ -445,7 +431,6 @@ def random_train_model(model, train_dataloader, n_epochs, criterion, learning_ra
             epoch += 1
 
             batches = init_batches(current_epoch_batches)
-            # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
             if batches[0][0].size(0) != model.init_h_c().size()[1]:
                 continue
 
@@ -460,15 +445,11 @@ def random_train_model(model, train_dataloader, n_epochs, criterion, learning_ra
                 if tmp > percent:
                     percent = tmp
                     with open("tmp_print{}.txt".format("" if model_name is None else "_-_" + model_name), "a") as file:  # TODO: Only for tests, remove it.
-                        # file.write(str(time_since(start)) + " ; " + str(percent) + " %\n")
                         file.write('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, epoch_size, it / n_iters * 100, total_loss / it, loss) + "\n")
                 print('%s (%d:%d %d%%) %.4f (%.4f)' % (time_since(start), epoch, epoch_size, it / n_iters * 100, total_loss / it, loss))
 
 
             current_epoch_batches = []
-
-        # if epoch >= 20:  # TODO: Only for tests (remove it)
-        #     break
 
 
 def pretrain_model(model, n_epochs, epoch_size, criterion, learning_rate, random=True, print_every=None, model_name=None, verbose=True):
@@ -490,8 +471,6 @@ def pretrain_model(model, n_epochs, epoch_size, criterion, learning_rate, random
 
 def compute_pretrain_set(train_data, verbose=True):
     pretrain_set = tools.extract_pretrain_data()
-    # train_data = train_data[:1000]
-    # pretrain_set = pretrain_set[:1000]
     selected_train_data, selected_words = [], []
     train_size, words_size = len(train_data), len(pretrain_set)
     train_counter, words_counter, train_percent, words_percent = -1, -1, -1, -1
@@ -542,7 +521,7 @@ def argmax(float_list):
     return max_idx
 
 
-def print_progress(total, acc, start, iter, size):
+def print_progress(total, acc, start, iter, size, name="coverage"):
     global print_progress_current_percent
     print_progress_current_percent = -1
     bar_len = 50
@@ -559,7 +538,7 @@ def print_progress(total, acc, start, iter, size):
     else:
         bar = '=' * (filled_len - 1) + '>' + ' ' * (bar_len - filled_len)
 
-    sys.stdout.write('[%s] %s%s => coverage of %.3f %% (%d) on %s \r' % (bar, percents, ' %', current_percent, acc, time_since(start)))
+    sys.stdout.write('[%s] %s%s => %s of %.3f %% (%d) on %s \r' % (bar, percents, ' %', name, current_percent, acc, time_since(start)))
     sys.stdout.flush()
 
 
@@ -700,7 +679,7 @@ def criterion_eval_batch(model, batches, criterion):
     model.zero_grad()
 
     for input_batch, target_batch in batches:
-        if input_batch.size(0) != hidden.size()[1]:
+        if input_batch.size(0) != hidden.size()[1] or -1 in input_batch.tolist()[0]:
             continue
         output, hc = model(input_batch.to(device), *(item.to(device) for item in hc))
         loss = criterion(output.to(device), target_batch.type(torch.FloatTensor).to(device))
@@ -723,18 +702,17 @@ def criterion_eval(lstm, eval_dataloader, criterion, verbose=True):
         i += 1
 
         batches = init_batches([batch])
-        if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
-            continue
+        if batches[0][0].size(0) != lstm.init_h_c().size()[1] or -1 in batches[0][0].tolist()[0]:
+            continue  # Unknown letters can't be predicted.
 
         output, loss = criterion_eval_batch(lstm, batches, criterion)
         total_loss += loss
         remainer -= 1
 
         if verbose:
-            print_progress(total=n_iters, acc=loss, start=start, iter=i, size=n_iters)
+            print_progress(total=n_iters, acc=loss, start=start, iter=i, size=n_iters, name="loss")
 
-    accuracy = 100 * total_loss.item() / (n_iters - remainer)
-    print('\nLoss: ', accuracy, '%')
+    print('\nLoss: ', total_loss.item() / (n_iters - remainer))
 
 
 def test_brute_force(test_data, batch_size=1, max_length=128, print_every=None, verbose=True):
@@ -853,6 +831,7 @@ if __name__ == '__main__':
 
     have_to_train = tools.parse_bools(args.train)
     train_set = tools.extract_train_data()
+    # train_set = tools.extract_selected_train_data()
     get_vocab(train_set)  # Init vocab
     print(get_vocab(train_set))
     random_train = tools.parse_bools(args.random)
@@ -911,7 +890,7 @@ if __name__ == '__main__':
     max_length = 128
 
     if debug:
-        print("Use Debug mode")
+        print("Use debug mode.")
         train_set = train_set[-1000:]
         n_epochs = 1_000
         if not random_train:
