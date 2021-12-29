@@ -1,5 +1,6 @@
 #! /bin/env python3
 import math
+import os
 import string
 from os import path
 import sys
@@ -782,7 +783,7 @@ def save_model(model, model_name):
     model_name += ".pt"
     model_path = path.join(dirname(abspath(__file__)), consts.models_dir, model_name)
     tools.init_dir(model_path)
-    # model_path = consts.models_dir + model_name
+    # print(os.path.exists(dirname(model_path)))
     torch.save(model, model_path)
     print('Model saved in: ', model_path)
 
@@ -869,7 +870,7 @@ if __name__ == '__main__':
     bruteforce = tools.parse_bools(args.bruteforce)
     verbose = tools.parse_bools(args.verbose)
     model_name = args.model
-    tools.init_dir(model_name)
+    # tools.init_dir(model_name)
     print(model_name)
 
     nn_classes = {
@@ -881,6 +882,7 @@ if __name__ == '__main__':
     for k, v in nn_classes.items():
         if args.nn_class == k:
             nn_class = v
+    print("Model:", nn_class)
     input_size = get_vocab_size()
     hidden_size = args.hidden_size
     output_size = get_vocab_size()
@@ -967,7 +969,7 @@ if __name__ == '__main__':
             "batch_size={}".format(batch_size),
             "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
             "random_train={}".format(random_train),
-            "train_size={}".format(str(len(batch_train_dataloader)) + "" if not random_train else str(n_epochs * batch_size)),
+            "n_pretrain_epochs={}".format(n_pretrain_epochs),
             # "pretrain={}".format(have_to_pretrain),
             # "pretrained_model_(no_train)",
             "pretrained_only",
@@ -1000,7 +1002,7 @@ if __name__ == '__main__':
             "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
             "random_train={}".format(random_train),
             "train_size={}".format(str(len(batch_train_dataloader)) + "" if not random_train else str(n_epochs * batch_size)),
-            "pretrain={}".format(have_to_pretrain),
+            "pretrain={}".format(False if not have_to_pretrain else str(n_pretrain_epochs) + "_epochs"),
             "debug={}".format(debug),
             "{}".format(run_id)
         ])
