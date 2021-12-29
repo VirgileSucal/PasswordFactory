@@ -29,15 +29,16 @@ if __name__ == '__main__':
 
     args_lists = {
         "random": [True, False],
+        "pretrain": [True, False],
         "nn_class": ["RNN", "LSTM", "GRU"],
         "hidden_size": [64, 256, 512],
         "batch_size": [1, 64, 128],
         "n_layers": [1, 2, 4],
-        "bidirectional": [True, False],
+        # "bidirectional": [True, False],
+        "bidirectional": [True],
         "dropout_value": [0, 0.01, 0.1],
         # "use_softmax": [True, False],
         # "n_epochs": [100_000],
-        "n_pretrain_epochs": [1_000],
         # "n_tests": [10_000],
         "lr": [0.005, 0.05, 0.001],
         # "epoch_size": [1],
@@ -47,6 +48,8 @@ if __name__ == '__main__':
     def_n_epochs = 20
     n_epochs_random_list = [1_000_000]
     n_epochs_list = [20]
+    n_pretrain_epochs_list = [1, 4, 10],
+    n_pretrain_epochs_random_list = [20_674, 80_000],
 
     # output = subprocess.run(
     #     ["sh", join(
@@ -64,8 +67,10 @@ if __name__ == '__main__':
             def_args = {**default_args}
             if arg == "random" and value == True:
                 def_args["n_epochs"] = def_n_epochs_random
+                def_args["n_pretrain_epochs"] = n_pretrain_epochs_list
             else:
                 def_args["n_epochs"] = def_n_epochs
+                def_args["n_pretrain_epochs"] = n_pretrain_epochs_random_list
 
             args = "--{} {}".format(arg, str(value)) + " " + " ".join([
                 "--{} {}".format(a, str(v)) for a, v in def_args.items() if a != arg

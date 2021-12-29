@@ -959,6 +959,22 @@ if __name__ == '__main__':
     print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_pretrain:", have_to_pretrain, "({})".format(type(have_to_pretrain)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
 
     if have_to_pretrain:
+        model_name = "_-_".join([
+            args.nn_class,
+            "hidden_size={}".format(hidden_size),
+            "n_layers={}".format(n_layers),
+            "bidirectional={}".format(bidirectional),
+            "dropout_value={}".format(dropout_value),
+            "use_softmax={}".format(use_softmax),
+            "batch_size={}".format(batch_size),
+            "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
+            "random_train={}".format(random_train),
+            "train_size={}".format(str(len(batch_train_dataloader)) + "" if not random_train else str(n_epochs * batch_size)),
+            "pretrain={}".format(have_to_pretrain),
+            "pretrained_model_(no_train)",
+            "debug={}".format(debug),
+            "{}".format(run_id)
+        ])
         pretrain_model(
             model,
             n_pretrain_epochs,
@@ -969,6 +985,7 @@ if __name__ == '__main__':
             print_every=print_every,
             verbose=verbose
         )
+        save_model(model, model_name)
 
     if have_to_train:
         print("\n\nTRAIN\n")
@@ -983,6 +1000,8 @@ if __name__ == '__main__':
             "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
             "random_train={}".format(random_train),
             "train_size={}".format(str(len(batch_train_dataloader)) + "" if not random_train else str(n_epochs * batch_size)),
+            "pretrain={}".format(have_to_pretrain),
+            "debug={}".format(debug),
             "{}".format(run_id)
         ])
         print("Train model \"{}\"".format(model_name))
