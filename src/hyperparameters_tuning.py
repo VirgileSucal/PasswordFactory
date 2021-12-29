@@ -21,15 +21,13 @@ if __name__ == '__main__':
         "bidirectional": consts.default_bidirectional_arg,
         "dropout_value": consts.default_dropout_value_arg,
         "use_softmax": False,
-        # "n_epochs": consts.default_n_epochs_arg,
-        "n_pretrain_epochs": consts.default_n_pretrain_epochs_arg,
         "lr": consts.default_lr_arg,
         "epoch_size": 1,
     }
 
     args_lists = {
-        "random": [True, False],
-        "pretrain": [True, False],
+        # "random": [True, False],
+        # "pretrain": [True, False],
         "nn_class": ["RNN", "LSTM", "GRU"],
         "hidden_size": [64, 256, 512],
         "batch_size": [1, 64, 128],
@@ -42,14 +40,15 @@ if __name__ == '__main__':
         # "n_tests": [10_000],
         "lr": [0.005, 0.05, 0.001],
         # "epoch_size": [1],
+        "n_pretrain_epochs_random": [20_674, 80_000],
+        "n_pretrain_epochs": [1, 4, 10],
+        "n_epochs_random_list": [1_000_000],
+        "n_epochs_list": [4],
     }
 
     def_n_epochs_random = 1_000_000
     def_n_epochs = 20
-    n_epochs_random_list = [1_000_000]
-    n_epochs_list = [20]
-    n_pretrain_epochs_list = [1, 4, 10],
-    n_pretrain_epochs_random_list = [20_674, 80_000],
+    def_n_epochs = 4
 
     # output = subprocess.run(
     #     ["sh", join(
@@ -65,16 +64,39 @@ if __name__ == '__main__':
     for arg, values in args_lists.items():
         for value in values:
             def_args = {**default_args}
+            args = ""
+
             if arg == "random" and value == True:
                 def_args["n_epochs"] = def_n_epochs_random
-                def_args["n_pretrain_epochs"] = n_pretrain_epochs_list
             else:
                 def_args["n_epochs"] = def_n_epochs
-                def_args["n_pretrain_epochs"] = n_pretrain_epochs_random_list
 
-            args = "--{} {}".format(arg, str(value)) + " " + " ".join([
-                "--{} {}".format(a, str(v)) for a, v in def_args.items() if a != arg
-            ])
+            if arg == "n_epochs_random_list":
+                def_args["random"] = True
+                def_args["pretrain"] = False
+                def_args["n_epochs"] = str(value)
+            elif arg == "n_epochs_list":
+                def_args["random"] = False
+                def_args["pretrain"] = False
+                def_args["n_epochs"] = str(value)
+                args += "--{} {}".format(arg, str(value)) + " "
+            elif arg == "n_pretrain_epochs_random":
+                def_args["random"] = True
+                def_args["pretrain"] = True
+                def_args["n_epochs"] = def_n_epochs_random
+                def_args["n_pretrain_epochs"] = str(value)
+            elif arg == "n_pretrain_epochs":
+                def_args["random"] = False
+                def_args["pretrain"] = True
+                def_args["n_epochs"] = def_n_epochs
+                def_args["n_pretrain_epochs"] = str(value)
+                args += "--{} {}".format(arg, str(value)) + " "
+            else:
+                args += "--{} {}".format(arg, str(value)) + " "
+
+            args += " ".join([
+                    "--{} {}".format(a, str(v)) for a, v in def_args.items() if a != arg
+                ])
             # # args += " -d True "
             # args += " $dbg "
             # print("args)

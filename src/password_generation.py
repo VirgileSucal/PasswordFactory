@@ -348,7 +348,7 @@ def train_model_mini_batch(model, batches, criterion, learning_rate):
     return output, loss.item() / len(batches)
 
 
-def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, model_name=None, verbose=True):
+def train_model_epoch(model, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, model_name=None, verbose=True):
 
     assert train_dataloader is not None
 
@@ -362,7 +362,7 @@ def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_b
     total_loss = 0
     best_loss = (100, 0)
     mini_batches_size = n_iters // min(n_mini_batches, n_iters)
-    print("Data size:", n_iters, ";Mini Batches size:", mini_batches_size, "; Epochs:", n_mini_batches, "Batch size:", lstm.batch_size)
+    print("Data size:", n_iters, ";Mini Batches size:", mini_batches_size, "; Epochs:", n_mini_batches, "Batch size:", model.batch_size)
     if print_every is None:
         print_every = mini_batches_size
 
@@ -380,10 +380,10 @@ def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_b
 
             batches = init_batches(current_epoch_batches)
             # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
-            if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
+            if batches[0][0].size(0) != model.init_h_c().size()[1]:
                 continue
 
-            output, loss = train_model_mini_batch(lstm, batches, criterion, learning_rate)
+            output, loss = train_model_mini_batch(model, batches, criterion, learning_rate)
             total_loss += loss
             if loss < best_loss[0]:
                 best_loss = (loss, iter)
@@ -406,15 +406,15 @@ def train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_b
         #     break
 
 
-def train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
+def train_model(model, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
 
     for epoch in range(n_epochs):
         if verbose:
             print("\nEpoch:", epoch + 1, "/", n_epochs)
-        train_model_epoch(lstm, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=print_every, model_name=model_name, verbose=verbose)
+        train_model_epoch(model, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=print_every, model_name=model_name, verbose=verbose)
 
 
-def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
+def random_train_model(model, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
 
     assert train_dataloader is not None
     assert n_epochs > 0
@@ -425,7 +425,7 @@ def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rat
     best_loss = (100, 0)
     n_iters = len(train_dataloader)
     epoch_size = n_iters // min(n_epochs, n_iters)
-    print("Data size:", n_iters, "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", lstm.batch_size)
+    print("Data size:", n_iters, "; Epoch size:", epoch_size, "; Epochs:", n_epochs, "Batch size:", model.batch_size)
     if print_every is None:
         print_every = epoch_size
 
@@ -445,10 +445,10 @@ def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rat
 
             batches = init_batches(current_epoch_batches)
             # if len(batches) == 1 and batches[0].size(0) != lstm.init_h_c().size()[1]:
-            if batches[0][0].size(0) != lstm.init_h_c().size()[1]:
+            if batches[0][0].size(0) != model.init_h_c().size()[1]:
                 continue
 
-            output, loss = train_model_mini_batch(lstm, batches, criterion, learning_rate)
+            output, loss = train_model_mini_batch(model, batches, criterion, learning_rate)
             total_loss += loss
             if loss < best_loss[0]:
                 best_loss = (loss, it)
@@ -470,23 +470,21 @@ def random_train_model(lstm, train_dataloader, n_epochs, criterion, learning_rat
         #     break
 
 
-def pretrain_model(lstm, n_epochs, epoch_size, criterion, learning_rate, random=True, print_every=None, verbose=True):
+def pretrain_model(model, n_epochs, epoch_size, criterion, learning_rate, random=True, print_every=None, model_name=None, verbose=True):
     """
     Pretrain model on a dataset containing obscene words
-
-    Link to dataset: github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/blob/master/en
     """
 
     pretrain_dataloader = None
-    batch_size = lstm.batch_size
+    batch_size = model.batch_size
     pretrain_set = tools.extract_pretrain_data()
     if random:
         random_sampler = RandomSampler(pretrain_set, num_samples=n_epochs * epoch_size * batch_size, replacement=True)
         pretrain_dataloader = DataLoader(pretrain_set, batch_size=batch_size, shuffle=False, sampler=random_sampler)
-        random_train_model(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
+        random_train_model(model, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, model_name=model_name, verbose=verbose)
     else:
         pretrain_dataloader = DataLoader(pretrain_set, batch_size=batch_size, shuffle=True)
-        train_model(lstm, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, verbose=verbose)
+        train_model(model, pretrain_dataloader, n_epochs, criterion, learning_rate, print_every=print_every, model_name=model_name, verbose=verbose)
 
 
 def compute_pretrain_set(train_data, verbose=True):
@@ -970,8 +968,9 @@ if __name__ == '__main__':
             "epoch_size={}".format(len(batch_train_dataloader) // min(n_epochs, len(batch_train_dataloader))),
             "random_train={}".format(random_train),
             "train_size={}".format(str(len(batch_train_dataloader)) + "" if not random_train else str(n_epochs * batch_size)),
-            "pretrain={}".format(have_to_pretrain),
-            "pretrained_model_(no_train)",
+            # "pretrain={}".format(have_to_pretrain),
+            # "pretrained_model_(no_train)",
+            "pretrained_only",
             "debug={}".format(debug),
             "{}".format(run_id)
         ])
@@ -983,6 +982,7 @@ if __name__ == '__main__':
             learning_rate,
             random=random_train,
             print_every=print_every,
+            model_name=model_name,
             verbose=verbose
         )
         save_model(model, model_name)
@@ -990,7 +990,7 @@ if __name__ == '__main__':
     if have_to_train:
         print("\n\nTRAIN\n")
         model_name = "_-_".join([
-            "lstm",
+            args.nn_class,
             "hidden_size={}".format(hidden_size),
             "n_layers={}".format(n_layers),
             "bidirectional={}".format(bidirectional),
