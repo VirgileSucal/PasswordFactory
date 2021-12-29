@@ -1,7 +1,7 @@
 #! /bin/env python3
 from os import path
 
-root_dir = "../"
+root_dir = ".."
 data_dir = str(path.join(root_dir, "data"))
 output_dir = str(path.join(root_dir, "output"))
 src_dir = str(path.join(root_dir, "src"))
