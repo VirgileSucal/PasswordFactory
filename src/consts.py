@@ -35,6 +35,6 @@ default_dropout_value_arg = 0.0
 default_use_softmax_arg = False
 default_n_epochs_arg = 100_000
 default_n_pretrain_epochs_arg = 1_000
-default_n_tests_arg = 10_000
+default_n_tests_arg = 5_000
 default_lr_arg = 0.005
 default_epoch_size_arg = 1

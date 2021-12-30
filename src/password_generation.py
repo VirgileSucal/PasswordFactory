@@ -679,7 +679,12 @@ def criterion_eval_batch(model, batches, criterion):
     model.zero_grad()
 
     for input_batch, target_batch in batches:
-        if input_batch.size(0) != hidden.size()[1] or -1 in input_batch.tolist()[0]:
+        stop = False
+        for input_item in input_batch.tolist():
+            if -1 in input_item:
+                stop = True
+                break
+        if input_batch.size(0) != hidden.size()[1] or stop:
             continue
         output, hc = model(input_batch.to(device), *(item.to(device) for item in hc))
         loss = criterion(output.to(device), target_batch.type(torch.FloatTensor).to(device))
@@ -702,7 +707,13 @@ def criterion_eval(lstm, eval_dataloader, criterion, verbose=True):
         i += 1
 
         batches = init_batches([batch])
-        if batches[0][0].size(0) != lstm.init_h_c().size()[1] or -1 in batches[0][0].tolist()[0]:
+        stop = False
+        for input_batch in batches:
+            for input_item in input_batch[0].tolist():
+                if -1 in input_item:
+                    stop = True
+                    break
+        if batches[0][0].size(0) != lstm.init_h_c().size()[1] or stop:
             continue  # Unknown letters can't be predicted.
 
         output, loss = criterion_eval_batch(lstm, batches, criterion)
