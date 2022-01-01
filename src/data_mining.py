@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import Counter, OrderedDict
-
+from statistics import mean, median
 
 def get_pw_sizes(data):
     return [len(item) for item in data]
@@ -45,6 +45,10 @@ def get_duplicate(data):
     return data_count, {password: n for password, n in data_count.items() if n > 1}
 
 
+def get_mean_median(password_size):
+    return mean(password_size), median(password_size)
+
+
 if __name__ == '__main__':
     train_set, _ = tools.extract_data()
     print(train_set)
@@ -72,3 +76,7 @@ if __name__ == '__main__':
         if(round(ratio * 100, 7) <= lim_ratio):
             print(char, ":", n, "(", round(ratio * 100, 7), "% )")
     print(len(chars))
+
+    mean_value, median_value = get_mean_median(sizes)
+    print("Mean password length: ", mean_value)
+    print("Median password length: ", median_value)
