@@ -1,5 +1,6 @@
 #! /bin/env python3
 
+from os.path import join
 import consts
 import tools
 import pandas as pd
@@ -54,7 +55,7 @@ if __name__ == '__main__':
     print("Passwords longer than {}:".format(lim), len([length for length in sizes if length > lim]))
     sizes.sort(reverse=False)
     print("Lowest password sizes:", sizes[0:20])
-    # violin(s, consts.fig_path + "test.pdf")
+    violin(sizes, join(consts.fig_path, "test.pdf"))
     train_set, eval_set = tools.extract_data()
     print(get_pw_sizes(train_set))
 

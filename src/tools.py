@@ -57,6 +57,13 @@ def extract_eval_data():
     return fix_backslash(read_file(consts.eval_set))
 
 
+def extract_data():
+    train_set, eval_set = None, None
+    train_set = extract_train_data()
+    eval_set = extract_eval_data()
+    return train_set, fix_backslash(eval_set)
+
+
 def init_dir(path):
     if not exists(dirname(path)):
         makedirs(dirname(path))
