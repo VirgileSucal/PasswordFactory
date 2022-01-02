@@ -3,6 +3,8 @@ from os import path
 
 root_dir = ".."
 data_dir = str(path.join(root_dir, "data"))
+runs_dir = str(path.join(root_dir, "runs"))
+run_file_name_format = str(path.join(runs_dir, "run_{}.txt"))
 output_dir = str(path.join(root_dir, "output"))
 src_dir = str(path.join(root_dir, "src"))
 models_dir = str(path.join(output_dir, "models"))
@@ -25,7 +27,8 @@ default_bruteforce_arg = False
 default_random_arg = False
 default_debug_arg = False
 default_verbose_arg = True
-default_test_set_arg = None
+# default_test_set_arg = None
+default_test_set_arg = False
 default_nn_class_arg = 'LSTM'
 default_hidden_size_arg = 256
 default_batch_size_arg = 1

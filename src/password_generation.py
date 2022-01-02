@@ -4,7 +4,7 @@ import os
 import string
 from os import path
 import sys
-from os.path import abspath, dirname
+from os.path import abspath, dirname, join
 from random import randint
 from time import time
 import torch
@@ -669,6 +669,45 @@ def test(model, test_data, n_tests, number_of_first_letters=1, max_length=128, v
     print('\nCoverage: ', accuracy, '%')
 
 
+def generate_runs(model, number_of_first_letters=1, max_length=128, verbose=True):
+
+    start = time()
+    accuracy = 0
+    batch_size = model.batch_size
+    print(batch_size)
+    current_batch = []
+
+    # i = 0
+    for n_tests in [
+        10_000,
+        100_000,
+        1_000_000,
+    ]:
+        run_path = consts.run_file_name_format.format(str(n_tests))
+        tools.init_dir(run_path)
+        tools.write_file(run_path, '', 'w')
+        for i in range(1, n_tests + 1):
+
+            starting_letter = ""
+            for _ in range(number_of_first_letters):
+                random_index = randint(consts.vocab_start_idx, get_vocab_size() - consts.vocab_start_idx)
+                starting_letter += get_vocab()[random_index]
+
+            current_batch.append(starting_letter)
+
+            if i % batch_size == 0:  # All batches for this epoch have been loaded.
+
+                predicted_passwords = generate_passwords_batches(model, current_batch, max_length=max_length)
+
+                for predicted in predicted_passwords:
+                    tools.write_file(run_path, predicted + '\n', 'a')
+
+                current_batch = []
+
+                if verbose:
+                    print_progress(total=n_tests, acc=accuracy, start=start, iter=i, size=n_tests, name="generation")
+
+
 def criterion_eval_batch(model, batches, criterion):
     hidden = model.init_h_c()
     cell = model.init_h_c()
@@ -818,7 +857,8 @@ def get_args():
     parser.add_argument("-r", "--random", default=consts.default_random_arg, type=str, help="Use random train [default False]")
     parser.add_argument("-d", "--debug", default=consts.default_debug_arg, type=str, help="Activate debug code [default False]")
     parser.add_argument("-v", "--verbose", default=consts.default_verbose_arg, type=str, help="Print log [default True]")
-    parser.add_argument("-s", "--test_set", default=consts.default_test_set_arg, type=str, help="Path to dataset for tests")
+    # parser.add_argument("-s", "--test_set", default=consts.default_test_set_arg, type=str, help="Path to dataset for tests")
+    parser.add_argument("-s", "--test_set", default=consts.default_test_set_arg, type=str, help="Generate runs for tests [default False]")
 
     parser.add_argument('-c', '--nn_class', default=consts.default_nn_class_arg, type=str, help="Neural network to use [default LSTM]")
     parser.add_argument("--hidden_size", default=consts.default_hidden_size_arg, type=int, help="Hidden size [default False]")
@@ -853,8 +893,9 @@ if __name__ == '__main__':
     if have_to_eval:
         eval_set = tools.extract_eval_data()
 
-    test_set = None if args.test_set is None else tools.read_file(args.test_set)
-    have_to_test = False if test_set is None else True
+    # test_set = None if args.test_set is None else tools.read_file(args.test_set)
+    # have_to_test = False if test_set is None else True
+    have_to_test = tools.parse_bools(args.test_set)
 
     debug = tools.parse_bools(args.debug)
     bruteforce = tools.parse_bools(args.bruteforce)
@@ -944,7 +985,6 @@ if __name__ == '__main__':
         dropout_value=dropout_value,
         use_softmax=use_softmax
     ).to(device)
-    decoder_optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     print("have_to_train:", have_to_train, "({})".format(type(have_to_train)), "have_to_pretrain:", have_to_pretrain, "({})".format(type(have_to_pretrain)), "have_to_eval:", have_to_eval, "({})".format(type(have_to_eval)))
 
@@ -1038,9 +1078,10 @@ if __name__ == '__main__':
 
     if have_to_test:
         print("\n\nTEST\n")
-        # test_dataloader = DataLoader(test_set, batch_size=lstm1.batch_size, shuffle=True)
-        test(model, test_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
-        eval_set = test_set
+        # # test_dataloader = DataLoader(test_set, batch_size=lstm1.batch_size, shuffle=True)
+        # test(model, test_set, n_tests, number_of_first_letters, max_length, verbose=verbose)
+        generate_runs(model, number_of_first_letters, max_length, verbose=verbose)
+        # eval_set = test_set
 
     if bruteforce:
         test_brute_force(eval_set, batch_size=model.batch_size, max_length=max_length, print_every=print_every, verbose=verbose)
