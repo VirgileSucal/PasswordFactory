@@ -1,0 +1,43 @@
+#! /bin/env python3
+from os import path
+
+root_dir = ".."
+data_dir = str(path.join(root_dir, "data"))
+runs_dir = str(path.join(root_dir, "runs"))
+run_file_name_format = str(path.join(runs_dir, "run_{}.txt"))
+output_dir = str(path.join(root_dir, "output"))
+src_dir = str(path.join(root_dir, "src"))
+models_dir = str(path.join(output_dir, "models"))
+train_set = str(path.join(data_dir, "TrainEval", "train.txt"))
+pretrain_set = str(path.join(data_dir, "words.txt"))
+eval_set = str(path.join(data_dir, "TrainEval", "eval.txt"))
+selected_train_data = str(path.join(output_dir, "selected_train_data.txt"))
+selected_pretrain_data = str(path.join(output_dir, "selected_pretrain_data.txt"))
+fig_path = str(path.join(output_dir, "fig"))
+default_model_file = "lstm"
+default_n_samples = 10_000
+bools = {"true": True, "false": False}
+vocab_start_idx = 2
+default_run_arg = default_model_file
+default_model_arg = str(path.join(models_dir, default_model_file))
+default_train_arg = True
+default_pretrain_arg = False
+default_eval_arg = True
+default_bruteforce_arg = False
+default_random_arg = False
+default_debug_arg = False
+default_verbose_arg = True
+# default_test_set_arg = None
+default_test_set_arg = False
+default_nn_class_arg = 'LSTM'
+default_hidden_size_arg = 256
+default_batch_size_arg = 1
+default_n_layers_arg = 1
+default_bidirectional_arg = False
+default_dropout_value_arg = 0.0
+default_use_softmax_arg = False
+default_n_epochs_arg = 100_000
+default_n_pretrain_epochs_arg = 1_000
+default_n_tests_arg = 5_000
+default_lr_arg = 0.005
+default_epoch_size_arg = 1
