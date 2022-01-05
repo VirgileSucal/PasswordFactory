@@ -36,7 +36,7 @@ __vocab_size = None
 
 def time_since(since):
     """
-    This method calculates the elapsed time between the start of a method and the current time
+    Compute elapsed time between the start of a method and current time
 
     :param since: the starting date
     :return: the elapsed time
@@ -51,7 +51,9 @@ def time_since(since):
 
 def get_vocab(data=None):
     """
-    This method is a getter that returns the vocabulary of a specified dataset
+    Compute vocabulary once and return it
+
+    Dataset is returned without computing it several times.
 
     :param data: a dataset
     :return: the vocabulary of this dataset
@@ -68,7 +70,10 @@ def get_vocab(data=None):
 
 def get_vocab_size(data=None) -> int:
     """
-    This method is a getter that returns the vocabulary size of a specified dataset
+    Compute vocabulary size once and return it
+
+    Dataset is returned without computing it several times.
+
     :param data: a dataset
     :return: the size of the vocabulary of this dataset
     """
@@ -82,6 +87,10 @@ def get_vocab_size(data=None) -> int:
 
 
 class RNN(nn.Module):
+    """
+    Model generating passwords using a RNN
+    """
+
     def __init__(self, input_size, hidden_size, output_size, batch_size=1, n_layers=1, bidirectional=False, dropout_value=0, use_softmax=False):
         super(RNN, self).__init__()
 
@@ -136,6 +145,12 @@ class RNN(nn.Module):
         return output, (hidden, )
 
     def init_h_c_with_zeros(self):
+        """
+        Initialize hidden state with zeros
+
+        :return: input tensor for hidden state
+        """
+
         return Variable(torch.zeros(
             (1 + int(self.bidirectional)) * self.n_layers,
             self.batch_size,
@@ -144,6 +159,12 @@ class RNN(nn.Module):
         ))
 
     def init_h_c(self):
+        """
+        Initialize hidden state with random values
+
+        :return: input tensor for hidden state
+        """
+
         return Variable(torch.rand(
             (1 + int(self.bidirectional)) * self.n_layers,
             self.batch_size,
@@ -154,7 +175,7 @@ class RNN(nn.Module):
 
 class LSTM(nn.Module):
     """
-    This class contains all methods related to the LSTM model
+    Model generating passwords using a LSTM
     """
 
     def __init__(self, input_size, hidden_size, output_size, batch_size=1, n_layers=1, bidirectional=False, dropout_value=0, use_softmax=False):
@@ -213,6 +234,12 @@ class LSTM(nn.Module):
         return output, (hidden, cell)
 
     def init_h_c_with_zeros(self):
+        """
+        Initialize hidden and cell states with zeros
+
+        :return: input tensor for hidden or cell states
+        """
+
         return Variable(torch.zeros(
             (1 + int(self.bidirectional)) * self.n_layers,
             self.batch_size,
@@ -221,6 +248,12 @@ class LSTM(nn.Module):
         ))
 
     def init_h_c(self):
+        """
+        Initialize hidden and cell states with random values
+
+        :return: input tensor for hidden or cell states
+        """
+
         return Variable(torch.rand(
             (1 + int(self.bidirectional)) * self.n_layers,
             self.batch_size,
@@ -230,6 +263,9 @@ class LSTM(nn.Module):
 
 
 class GRU(nn.Module):
+    """
+    Model generating passwords using a GRU
+    """
     def __init__(self, input_size, hidden_size, output_size, batch_size=1, n_layers=1, bidirectional=False, dropout_value=0, use_softmax=False):
         super(GRU, self).__init__()
 
@@ -284,6 +320,12 @@ class GRU(nn.Module):
         return output, (hidden, )
 
     def init_h_c_with_zeros(self):
+        """
+        Initialize hidden state with zeros
+
+        :return: input tensor for hidden state
+        """
+
         return Variable(torch.zeros(
             (1 + int(self.bidirectional)) * self.n_layers,
             self.batch_size,
@@ -292,6 +334,12 @@ class GRU(nn.Module):
         ))
 
     def init_h_c(self):
+        """
+        Initialize hidden state with random values
+
+        :return: input tensor for hidden state
+        """
+
         return Variable(torch.rand(
             (1 + int(self.bidirectional)) * self.n_layers,
             self.batch_size,
@@ -302,9 +350,10 @@ class GRU(nn.Module):
 
 def input_tensor(line):
     """
-    This method initializes an input tensor according to the line given
+    Initialize an input tensor according to the given line
+
     :param line: the line given to the method
-    :return: a tensor of Long
+    :return: the input tensor
     """
 
     return torch.LongTensor([get_vocab().find(line[li]) for li in range(0, len(line))])
@@ -312,10 +361,10 @@ def input_tensor(line):
 
 def target_tensor(line):
     """
-    This method initializes a target tensor according to the line given
+    Initialize a target tensor according to the given line
 
     :param line: the line given to the method
-    :return: a tensor
+    :return: the target tensor
     """
 
     tensor = torch.zeros(len(line), get_vocab_size(), dtype=torch.float64)
@@ -327,6 +376,19 @@ def target_tensor(line):
 
 
 def random_epoch_mini_batch(passwords_batches, epoch_size=1):
+    """
+    Initialize mini batch for an epoch in random training
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+
+    This method is now deprecated.
+
+    :param passwords_batches: list containing password to put in the mini-batch
+    :param epoch_size: size of th mini-batch
+    :return: mini-batch
+    """
+
     assert epoch_size > 0
     index = randint(0, len(passwords_batches) - epoch_size)
     selected_passwords_batches = passwords_batches.dataset[index: index + epoch_size]  # torch.utils.data.RandomSampler
@@ -342,11 +404,15 @@ def random_epoch_mini_batch(passwords_batches, epoch_size=1):
 
 def init_batches(passwords_batches):
     """
-    This method initializes batches
+    Initialize batches for standard training
 
-    :param passwords_batches: data to transform to batch
-    :return: generated batches
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+
+    :param passwords_batches: list containing password to put in the mini-batch
+    :return: generated mini-batch
     """
+
     batches = []
 
     for passwords_batch in passwords_batches:
@@ -357,6 +423,18 @@ def init_batches(passwords_batches):
 
 
 def train_model_mini_batch(model, batches, criterion, learning_rate):
+    """
+    Train model on batches of one mini-batch
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+
+    :param model: model to train
+    :param batches: mini-batch
+    :param criterion: metric to compute the loss
+    :param learning_rate: learning rate
+    """
+
     hidden = model.init_h_c()
     cell = model.init_h_c()
     if type(model) == LSTM:
@@ -384,6 +462,21 @@ def train_model_mini_batch(model, batches, criterion, learning_rate):
 
 
 def train_model_epoch(model, train_dataloader, criterion, learning_rate, n_mini_batches=None, print_every=None, model_name=None, verbose=True):
+    """
+    Train model on the full train set
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+
+    :param model: model to train
+    :param train_dataloader: train set
+    :param criterion: metric to compute the loss
+    :param learning_rate: learning rate
+    :param n_mini_batches: number of mini_batches to use
+    :param print_every: log print rate
+    :param model_name: name of model
+    :param verbose: True if log must be printed
+    """
 
     assert train_dataloader is not None
 
@@ -437,6 +530,21 @@ def train_model_epoch(model, train_dataloader, criterion, learning_rate, n_mini_
 
 
 def train_model(model, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
+    """
+    Train model several times on the full train set
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+
+    :param model: model to train
+    :param train_dataloader: train set
+    :param n_epochs: number of epochs
+    :param criterion: metric to compute the loss
+    :param learning_rate: learning rate
+    :param print_every: log print rate
+    :param model_name: name of model
+    :param verbose: True if log must be printed
+    """
 
     for epoch in range(n_epochs):
         if verbose:
@@ -445,6 +553,22 @@ def train_model(model, train_dataloader, n_epochs, criterion, learning_rate, pri
 
 
 def random_train_model(model, train_dataloader, n_epochs, criterion, learning_rate, print_every=None, model_name=None, verbose=True):
+    """
+    Train model several times on random mini-batches drawn from train set
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+    An epoch is a train on the full train set.
+
+    :param model: model to train
+    :param train_dataloader: train set
+    :param n_epochs: number of training epochs
+    :param criterion: metric to compute the loss
+    :param learning_rate: learning rate
+    :param print_every: log print rate
+    :param model_name: name of model
+    :param verbose: True if log must be printed
+    """
 
     assert train_dataloader is not None
     assert n_epochs > 0
@@ -498,6 +622,20 @@ def random_train_model(model, train_dataloader, n_epochs, criterion, learning_ra
 def pretrain_model(model, n_epochs, epoch_size, criterion, learning_rate, random=True, print_every=None, model_name=None, verbose=True):
     """
     Pretrain model on a dataset containing obscene words
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+    An epoch is a train on the full train set.
+
+    :param model: model to train
+    :param n_epochs: number of training epochs
+    :param epoch_size: size of training epochs
+    :param criterion: metric to compute the loss
+    :param learning_rate: learning rate
+    :param random: True if random train algorithm must be used
+    :param print_every: log print rate
+    :param model_name: name of model
+    :param verbose: True if log must be printed
     """
 
     pretrain_dataloader = None
@@ -513,6 +651,18 @@ def pretrain_model(model, n_epochs, epoch_size, criterion, learning_rate, random
 
 
 def compute_pretrain_set(train_data, verbose=True):
+    """
+    Compute pretrain dataset
+
+    Two datasets are computed:
+    - A pretrain set containing words which are in train set passwords;
+    - An alternative train set containing passwords containing english words.
+
+    :param train_data: train set
+    :param verbose: True if log must be printed
+    :return: new datasets
+    """
+
     pretrain_set = tools.extract_pretrain_data()
     selected_train_data, selected_words = [], []
     train_size, words_size = len(train_data), len(pretrain_set)
@@ -539,7 +689,7 @@ def compute_pretrain_set(train_data, verbose=True):
             #     words_percent = words_percent_tmp
             #     print_update = True
             if print_update:
-                print("passwords: {} % ; words: {} %".format(train_percent, words_percent))#, end="\r")
+                print("passwords: {} % ; words: {} %".format(train_percent, words_percent))
                 with open("tmp_print.txt", "a") as file:  # TODO: Only for tests, remove it.
                     file.write("passwords: {} % ; words: {} %\n".format(train_percent, words_percent))
             print_update = False
@@ -548,12 +698,27 @@ def compute_pretrain_set(train_data, verbose=True):
 
 
 def create_pretrain_files(train_data):
+    """
+    Create files containing pretrain data
+
+    This method is now deprecated.
+
+    :param train_data: train set
+    """
+
     selected_train_data, selected_words = compute_pretrain_set(train_data)
     # tools.write_file(consts.selected_train_data, selected_train_data)
     # tools.write_file(consts.selected_pretrain_data, selected_words)
 
 
 def argmax(float_list):
+    """
+    Process argmax on a float list
+
+    :param float_list: the list
+    :return: the argmax
+    """
+
     max_val = float_list[0]
     max_idx = 0
     for i in range(len(float_list)):
@@ -565,17 +730,19 @@ def argmax(float_list):
 
 
 def print_progress(total, acc, start, iter, size, name="coverage"):
-    global print_progress_current_percent
-    print_progress_current_percent = -1
     """
-    This method generates a progress bar
+    Print a progress bar
 
     :param total: total
     :param acc: accuracy
     :param start: start date
     :param iter: number of iteration
     :param size: size of the dataset
+    :param name: name of running task
     """
+
+    global print_progress_current_percent
+    print_progress_current_percent = -1
     bar_len = 50
     filled_len = int(round(bar_len * iter / float(total)))
     percents = round(100.0 * iter / float(total), 1)
@@ -596,12 +763,15 @@ def print_progress(total, acc, start, iter, size, name="coverage"):
 
 def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
     """
-    This method generates passwords
+    Generate passwords
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
 
     :param decoder: the model
     :param start_letters: the first letter of the generated password
     :param max_length: max length of passwords
-    :return: password generated
+    :return: passwords
     """
 
     with torch.no_grad():  # no need to track history in sampling
@@ -673,7 +843,7 @@ def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
 
 def get_first_letters(n, first_letters=None):
     """
-    This method returns letters from the vocabulary
+    Return letters from the vocabulary
 
     :param n: number of letters that will be returned
     :param first_letters: first letters
@@ -694,13 +864,13 @@ def get_first_letters(n, first_letters=None):
 
 def test(model, test_data, n_tests, number_of_first_letters=1, max_length=128, verbose=True):
     """
-    This method is used to test the password generation and the model accuracy
+    Test password generation and the model accuracy
 
     :param model: the model that will be tested
     :param test_data: data to test the model
     :param number_of_first_letters: number of first letters
-    :param max_length: length max of generated passwords
-    :param verbose: boolean, indicated if a progress bar will be displayed or not
+    :param max_length: max length of generated passwords
+    :param verbose: True if a progress bar must be displayed or not
     """
 
     start = time()
@@ -748,6 +918,14 @@ def test(model, test_data, n_tests, number_of_first_letters=1, max_length=128, v
 
 
 def generate_runs(model, number_of_first_letters=1, max_length=128, verbose=True):
+    """
+    Generate passwords ant put them into files
+
+    :param model: the model that will be tested
+    :param number_of_first_letters: number of first letters
+    :param max_length: length max of generated passwords
+    :param verbose: True if a progress bar must be displayed or not
+    """
 
     start = time()
     accuracy = 0
@@ -787,6 +965,17 @@ def generate_runs(model, number_of_first_letters=1, max_length=128, verbose=True
 
 
 def criterion_eval_batch(model, batches, criterion):
+    """
+    Test model accuracy on CrossEntropyLoss for a batch
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+
+    :param model: the model that will be tested
+    :param batches: mini-batch
+    :param criterion: metric to compute the loss
+    """
+
     hidden = model.init_h_c()
     cell = model.init_h_c()
     if type(model) == LSTM:
@@ -810,6 +999,17 @@ def criterion_eval_batch(model, batches, criterion):
 
 
 def criterion_eval(lstm, eval_dataloader, criterion, verbose=True):
+    """
+    Test model accuracy on CrossEntropyLoss
+
+    A batch is a matrix of vectors representing passwords that are forwarded together in model.
+    A mini-batch is a set of batches for which backpropagation is performed once.
+
+    :param model: the model that will be tested
+    :param eval_dataloader: eval set
+    :param criterion: metric to compute the loss
+    :param verbose: True if a progress bar must be displayed or not
+    """
 
     assert eval_dataloader is not None
 
@@ -844,6 +1044,16 @@ def criterion_eval(lstm, eval_dataloader, criterion, verbose=True):
 
 
 def test_brute_force(test_data, batch_size=1, max_length=128, print_every=None, verbose=True):
+    """
+    Compute coverage for brute force generation
+
+    :param test_data: test or eval set
+    :param batch_size: size of a batch
+    :param max_length: max length of generated passwords
+    :param print_every: log print rate
+    :param verbose: True if a progress bar must be displayed or not
+    """
+
     start = time()
     accuracy = 0
     nb_samples = len(test_data)
@@ -872,22 +1082,9 @@ def test_brute_force(test_data, batch_size=1, max_length=128, print_every=None, 
     print('\nCoverage: ', accuracy, '%')
 
 
-def get_best_hyper_parameters_sklearn(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
-    # It looks like this method only works with sklearn classifier (we are working with Pytorch)
-
-    random_search = RandomizedSearchCV(model, param_distributions=hyper_parameters, n_iter=n_iter_search)
-    random_search.fit(train_dataset, validation_dataset)
-    print(random_search.cv_results_)
-    return random_search.cv_results_
-
-
-def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, hyper_parameters, n_iter_search):
-    pass
-
-
 def save_model(model, model_name):
     """
-    This method allows saving the trained model
+    Save trained model
 
     :param model: model that should be saved
     :param model_name: name of the model
@@ -903,11 +1100,12 @@ def save_model(model, model_name):
 
 def load_model(model_name):
     """
-    This method allows loading a trained model previously saved
+    Load a trained model previously saved
 
     :param model_name: name of the model that will be loaded
-    :return: model loaded
+    :return: loaded model
     """
+
     model_name += ".pt"
     # model_path = path.join(dirname(abspath(__file__)), model_name)
     # model_path = model_name
@@ -923,7 +1121,7 @@ def load_model(model_name):
 
 def get_args():
     """
-    This method is a getter that returns arguments of the parser
+    Return arguments of the script
 
     :return: parser arguments
     """
