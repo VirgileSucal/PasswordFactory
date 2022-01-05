@@ -35,6 +35,13 @@ __vocab_size = None
 
 
 def time_since(since):
+    """
+    This method calculates the elapsed time between the start of a method and the current time
+
+    :param since: the starting date
+    :return: the elapsed time
+    """
+
     now = time()
     s = now - since
     m = math.floor(s / 60)
@@ -43,6 +50,13 @@ def time_since(since):
 
 
 def get_vocab(data=None):
+    """
+    This method is a getter that returns the vocabulary of a specified dataset
+
+    :param data: a dataset
+    :return: the vocabulary of this dataset
+    """
+
     global __vocab
     global __vocab_size
     assert not (__vocab is None and data is None)
@@ -53,6 +67,12 @@ def get_vocab(data=None):
 
 
 def get_vocab_size(data=None) -> int:
+    """
+    This method is a getter that returns the vocabulary size of a specified dataset
+    :param data: a dataset
+    :return: the size of the vocabulary of this dataset
+    """
+
     global __vocab
     global __vocab_size
     assert not (__vocab is None and data is None)
@@ -133,6 +153,10 @@ class RNN(nn.Module):
 
 
 class LSTM(nn.Module):
+    """
+    This class contains all methods related to the LSTM model
+    """
+
     def __init__(self, input_size, hidden_size, output_size, batch_size=1, n_layers=1, bidirectional=False, dropout_value=0, use_softmax=False):
         super(LSTM, self).__init__()
 
@@ -277,10 +301,23 @@ class GRU(nn.Module):
 
 
 def input_tensor(line):
+    """
+    This method initializes an input tensor according to the line given
+    :param line: the line given to the method
+    :return: a tensor of Long
+    """
+
     return torch.LongTensor([get_vocab().find(line[li]) for li in range(0, len(line))])
 
 
 def target_tensor(line):
+    """
+    This method initializes a target tensor according to the line given
+
+    :param line: the line given to the method
+    :return: a tensor
+    """
+
     tensor = torch.zeros(len(line), get_vocab_size(), dtype=torch.float64)
     for li in range(1, len(line)):  # Don't encode first one because it doesn't need to be predicted
         letter = line[li]
@@ -304,6 +341,12 @@ def random_epoch_mini_batch(passwords_batches, epoch_size=1):
 
 
 def init_batches(passwords_batches):
+    """
+    This method initializes batches
+
+    :param passwords_batches: data to transform to batch
+    :return: generated batches
+    """
     batches = []
 
     for passwords_batch in passwords_batches:
@@ -524,6 +567,15 @@ def argmax(float_list):
 def print_progress(total, acc, start, iter, size, name="coverage"):
     global print_progress_current_percent
     print_progress_current_percent = -1
+    """
+    This method generates a progress bar
+
+    :param total: total
+    :param acc: accuracy
+    :param start: start date
+    :param iter: number of iteration
+    :param size: size of the dataset
+    """
     bar_len = 50
     filled_len = int(round(bar_len * iter / float(total)))
     percents = round(100.0 * iter / float(total), 1)
@@ -543,6 +595,15 @@ def print_progress(total, acc, start, iter, size, name="coverage"):
 
 
 def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
+    """
+    This method generates passwords
+
+    :param decoder: the model
+    :param start_letters: the first letter of the generated password
+    :param max_length: max length of passwords
+    :return: password generated
+    """
+
     with torch.no_grad():  # no need to track history in sampling
 
         hidden = decoder.init_h_c()
@@ -611,6 +672,14 @@ def generate_passwords_batches(decoder, start_letters, max_length: int = 128):
 
 
 def get_first_letters(n, first_letters=None):
+    """
+    This method returns letters from the vocabulary
+
+    :param n: number of letters that will be returned
+    :param first_letters: first letters
+    :return: first letters
+    """
+
     assert n > 0
     if n == 1:
         return [letter for letter in get_vocab()]
@@ -624,6 +693,15 @@ def get_first_letters(n, first_letters=None):
 
 
 def test(model, test_data, n_tests, number_of_first_letters=1, max_length=128, verbose=True):
+    """
+    This method is used to test the password generation and the model accuracy
+
+    :param model: the model that will be tested
+    :param test_data: data to test the model
+    :param number_of_first_letters: number of first letters
+    :param max_length: length max of generated passwords
+    :param verbose: boolean, indicated if a progress bar will be displayed or not
+    """
 
     start = time()
     accuracy = 0
@@ -808,6 +886,13 @@ def get_best_hyper_parameters_pytorch(train_dataset, validation_dataset, model, 
 
 
 def save_model(model, model_name):
+    """
+    This method allows saving the trained model
+
+    :param model: model that should be saved
+    :param model_name: name of the model
+    """
+
     model_name += ".pt"
     model_path = path.join(dirname(abspath(__file__)), consts.models_dir, model_name)
     tools.init_dir(model_path)
@@ -817,6 +902,12 @@ def save_model(model, model_name):
 
 
 def load_model(model_name):
+    """
+    This method allows loading a trained model previously saved
+
+    :param model_name: name of the model that will be loaded
+    :return: model loaded
+    """
     model_name += ".pt"
     # model_path = path.join(dirname(abspath(__file__)), model_name)
     # model_path = model_name
@@ -831,6 +922,12 @@ def load_model(model_name):
 
 
 def get_args():
+    """
+    This method is a getter that returns arguments of the parser
+
+    :return: parser arguments
+    """
+
     parser = ArgumentParser()
     # parser.add_argument("--run", default=consts.default_run_arg, type=str, help="Name of the model saved file")
     parser.add_argument(
